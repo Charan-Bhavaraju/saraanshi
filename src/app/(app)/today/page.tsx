@@ -3,8 +3,10 @@ import { contacts, tasks } from '@/db/schema'
 import { isNull, eq, and, gte, lt, inArray } from 'drizzle-orm'
 import { startOfDay, endOfDay, addDays, formatDateLabel, getGreeting, formatDayHeader } from '@/lib/utils'
 import Link from 'next/link'
+import { unstable_cache } from 'next/cache'
 
-async function getStats() {
+// Revalidate every 60 s — fast enough for a daily planner, avoids a DB hit on every page load
+const getStats = unstable_cache(async function getStats() {
   const allContacts = await db
     .select({ id: contacts.id, status: contacts.status })
     .from(contacts)
@@ -65,7 +67,7 @@ async function getStats() {
       contact: t.contactId ? contactMap[t.contactId] ?? null : null,
     })),
   }
-}
+}, ['today-stats'], { revalidate: 60 })
 
 export default async function TodayPage() {
   const stats = await getStats()
