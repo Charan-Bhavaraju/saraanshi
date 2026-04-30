@@ -8,7 +8,7 @@ import { createContact, updateContact } from '../actions'
 import type { Contact } from '@/types/database'
 
 const TYPES = ['hospital', 'doctor', 'receptionist', 'patient', 'other'] as const
-const STATUSES = ['lead', 'contacted', 'interested', 'scheduled', 'interviewed', 'declined', 'done'] as const
+const STATUSES = ['lead', 'contacted', 'interested', 'scheduled', 'interviewed', 'declined', 'done', 'no_response'] as const
 const CONSENT_STATUSES = ['not_yet', 'verbal', 'written', 'withdrawn'] as const
 
 function Label({ children }: { children: React.ReactNode }) {

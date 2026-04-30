@@ -25,6 +25,7 @@ const COLUMNS: { status: ContactStatus; label: string; accent: string }[] = [
   { status: 'interested',  label: 'Interested',  accent: '#0E5C5C' },
   { status: 'scheduled',   label: 'Scheduled',   accent: '#4A5263' },
   { status: 'interviewed', label: 'Interviewed', accent: '#B8456D' },
+  { status: 'no_response', label: 'No Reply',    accent: '#8A929C' },
 ]
 
 export default function ContactKanban({ contacts: initialContacts }: { contacts: Contact[] }) {

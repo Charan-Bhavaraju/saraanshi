@@ -24,6 +24,7 @@ export const contactStatusEnum = pgEnum('contact_status', [
   'interviewed',
   'declined',
   'done',
+  'no_response',
 ])
 
 export const consentStatusEnum = pgEnum('consent_status', [

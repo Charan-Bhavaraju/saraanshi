@@ -1,11 +1,12 @@
 import { db } from '@/db'
 import { contacts, tasks } from '@/db/schema'
 import { isNull, eq, and, gte, lt, inArray } from 'drizzle-orm'
-import { startOfDay, endOfDay, addDays, formatDateLabel, getGreeting, formatDayHeader } from '@/lib/utils'
+import { startOfDay, endOfDay, addDays, getGreeting, formatDayHeader } from '@/lib/utils'
 import Link from 'next/link'
 import { unstable_cache } from 'next/cache'
+import TodayTaskList from './_components/TodayTaskList'
 
-// Revalidate every 60 s — fast enough for a daily planner, avoids a DB hit on every page load
+// Revalidate every 60 s; also busted via revalidateTag('today-stats') in task actions
 const getStats = unstable_cache(async function getStats() {
   const allContacts = await db
     .select({ id: contacts.id, status: contacts.status })
@@ -21,20 +22,39 @@ const getStats = unstable_cache(async function getStats() {
   ).length
 
   const now = new Date()
-  const todayTasks = await db
+  const todayStart = startOfDay(now)
+  const todayEnd = endOfDay(now)
+
+  // Todo tasks due today
+  const todoTasks = await db
     .select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt, status: tasks.status, contactId: tasks.contactId })
     .from(tasks)
     .where(
       and(
         isNull(tasks.deletedAt),
         eq(tasks.status, 'todo'),
-        gte(tasks.dueAt, startOfDay(now)),
-        lt(tasks.dueAt, endOfDay(now)),
+        gte(tasks.dueAt, todayStart),
+        lt(tasks.dueAt, todayEnd),
       ),
     )
-    .limit(6)
+    .limit(8)
 
-  const taskContactIds = todayTasks.flatMap(t => t.contactId ? [t.contactId] : [])
+  // Done tasks due today (completed tasks we still want to show)
+  const doneTasks = await db
+    .select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt, status: tasks.status, contactId: tasks.contactId })
+    .from(tasks)
+    .where(
+      and(
+        isNull(tasks.deletedAt),
+        eq(tasks.status, 'done'),
+        gte(tasks.dueAt, todayStart),
+        lt(tasks.dueAt, todayEnd),
+      ),
+    )
+    .limit(8)
+
+  const allTodayTasks = [...todoTasks, ...doneTasks]
+  const taskContactIds = allTodayTasks.flatMap(t => t.contactId ? [t.contactId] : [])
   const taskContacts =
     taskContactIds.length > 0
       ? await db
@@ -52,22 +72,31 @@ const getStats = unstable_cache(async function getStats() {
       and(
         isNull(tasks.deletedAt),
         eq(tasks.status, 'todo'),
-        gte(tasks.dueAt, startOfDay(now)),
+        gte(tasks.dueAt, todayStart),
         lt(tasks.dueAt, endOfDay(addDays(now, 1))),
       ),
     )
+
+  function attachContact<T extends { contactId: string | null }>(t: T) {
+    return { ...t, contact: t.contactId ? contactMap[t.contactId] ?? null : null }
+  }
 
   return {
     total,
     inConversation,
     interviewed,
     tasksDueToday: tasksDueCount.length,
-    todayTasks: todayTasks.map(t => ({
-      ...t,
-      contact: t.contactId ? contactMap[t.contactId] ?? null : null,
-    })),
+    todayTodoTasks: todoTasks.map(attachContact),
+    todayDoneTasks: doneTasks.map(attachContact),
   }
 }, ['today-stats'], { revalidate: 60 })
+
+function getWelcomeMessage(interviewed: number, inConversation: number): string {
+  if (interviewed >= 30) return 'You\'ve reached your interview goal — incredible work, Sravya!'
+  if (interviewed > 0) return `${interviewed} interview${interviewed === 1 ? '' : 's'} completed — you\'re building something meaningful.`
+  if (inConversation > 0) return `${inConversation} active conversation${inConversation === 1 ? '' : 's'} in progress — keep the momentum going.`
+  return 'Every conversation you start brings your research one step closer to impact.'
+}
 
 export default async function TodayPage() {
   const stats = await getStats()
@@ -95,6 +124,9 @@ export default async function TodayPage() {
           {dayLabel} · {stats.tasksDueToday === 0
             ? 'No tasks due today'
             : `${stats.tasksDueToday} task${stats.tasksDueToday === 1 ? '' : 's'} today`}
+        </p>
+        <p className="mt-2 text-sm" style={{ color: '#4A5263' }}>
+          {getWelcomeMessage(stats.interviewed, stats.inConversation)}
         </p>
       </div>
 
@@ -126,51 +158,10 @@ export default async function TodayPage() {
             </Link>
           </div>
 
-          {stats.todayTasks.length === 0 ? (
-            <p className="text-sm py-6 text-center" style={{ color: '#8A929C' }}>
-              No tasks due today.{' '}
-              <Link href="/tasks" style={{ color: '#0E5C5C' }}>Add one →</Link>
-            </p>
-          ) : (
-            <div>
-              {stats.todayTasks.map((task, i) => (
-                <div
-                  key={task.id}
-                  className="flex items-start gap-3 py-2.5"
-                  style={{ borderBottom: i < stats.todayTasks.length - 1 ? '1px solid #ECE6D9' : 'none' }}
-                >
-                  <div
-                    className="shrink-0 rounded mt-0.5"
-                    style={{ width: 18, height: 18, minWidth: 18, minHeight: 18, border: '1.5px solid #B5BBC4' }}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate" style={{ color: '#1A1F2C' }}>
-                      {task.title}
-                    </p>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      {task.dueAt && (
-                        <span
-                          className="px-1.5 py-0.5 rounded"
-                          style={{ fontFamily: 'var(--font-mono)', fontSize: 11, background: '#F5F1E9', color: '#4A5263' }}
-                        >
-                          {formatDateLabel(task.dueAt)}
-                        </span>
-                      )}
-                      {task.contact && (
-                        <>
-                          <span style={{ width: 3, height: 3, background: '#B5BBC4', borderRadius: '50%', display: 'inline-block', flexShrink: 0 }} />
-                          <span className="text-xs truncate" style={{ color: '#0E5C5C' }}>
-                            {task.contact.displayName}
-                            {task.contact.organization ? ` · ${task.contact.organization}` : ''}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <TodayTaskList
+            todoTasks={stats.todayTodoTasks}
+            doneTasks={stats.todayDoneTasks}
+          />
         </div>
 
         {/* Recent interviews — Phase 2 placeholder */}

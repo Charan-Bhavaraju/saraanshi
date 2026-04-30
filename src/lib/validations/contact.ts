@@ -10,7 +10,7 @@ export const ContactSchema = z.object({
   email: z.string().email().optional().nullable().or(z.literal('')),
   whatsapp: z.string().max(30).optional().nullable(),
   location: z.string().max(300).optional().nullable(),
-  status: z.enum(['lead', 'contacted', 'interested', 'scheduled', 'interviewed', 'declined', 'done']).default('lead'),
+  status: z.enum(['lead', 'contacted', 'interested', 'scheduled', 'interviewed', 'declined', 'done', 'no_response']).default('lead'),
   parentId: z.string().uuid().optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
   tags: z.array(z.string().max(50)).optional().nullable(),

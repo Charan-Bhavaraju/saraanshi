@@ -32,7 +32,7 @@ async function getParent(parentId: string) {
 const STATUS_LABELS: Record<string, string> = {
   lead: 'Lead', contacted: 'Contacted', interested: 'Interested',
   scheduled: 'Scheduled', interviewed: 'Interviewed',
-  declined: 'Declined', done: 'Done',
+  declined: 'Declined', done: 'Done', no_response: 'No Reply',
 }
 
 const CONSENT_LABELS: Record<string, string> = {
@@ -61,7 +61,7 @@ export default async function ContactDetailPage({
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path d="M9 2L4 7l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Contacts
+        Participants
       </Link>
 
       {/* Header */}
