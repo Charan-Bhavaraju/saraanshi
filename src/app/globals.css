@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+/* ─── Design tokens (match mockup exactly) ─── */
+@theme inline {
+  /* Fonts */
+  --font-serif: "Fraunces", Georgia, serif;
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+
+  /* Brand palette */
+  --color-cream:      #FAF7F2;
+  --color-paper:      #FFFFFF;
+  --color-paper-2:    #F5F1E9;
+  --color-ink:        #1A1F2C;
+  --color-ink-2:      #4A5263;
+  --color-ink-3:      #8A929C;
+  --color-ink-4:      #B5BBC4;
+
+  --color-teal:       #0E5C5C;
+  --color-teal-2:     #146E6E;
+  --color-teal-soft:  #E2EEEC;
+  --color-teal-line:  #C5DDD8;
+
+  --color-rose:       #B8456D;
+  --color-rose-soft:  #F7E5EB;
+
+  --color-amber:      #B8842A;
+  --color-amber-soft: #F5EBD3;
+
+  --color-sand:       #E8DFD0;
+  --color-line:       #ECE6D9;
+  --color-line-2:     #DDD4C2;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* Shadows */
+  --shadow-base: 0 1px 2px rgb(26 31 44 / 0.04), 0 4px 16px rgb(26 31 44 / 0.04);
+  --shadow-card: 0 1px 0 rgb(26 31 44 / 0.03), 0 8px 24px rgb(26 31 44 / 0.06);
+}
+
+/* ─── shadcn/ui CSS variable bridge ─── */
+:root {
+  --background: #FAF7F2;
+  --foreground: #1A1F2C;
+  --card: #FFFFFF;
+  --card-foreground: #1A1F2C;
+  --popover: #FFFFFF;
+  --popover-foreground: #1A1F2C;
+  --primary: #0E5C5C;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F5F1E9;
+  --secondary-foreground: #1A1F2C;
+  --muted: #F5F1E9;
+  --muted-foreground: #8A929C;
+  --accent: #E2EEEC;
+  --accent-foreground: #0E5C5C;
+  --destructive: #B8456D;
+  --destructive-foreground: #FFFFFF;
+  --border: #ECE6D9;
+  --input: #ECE6D9;
+  --ring: #0E5C5C;
+  --radius: 0.625rem;
+}
+
+/* ─── Base styles ─── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+}
+
+/* Safe-area: prevent content from hiding under notch / home-indicator */
+body {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* FAB clearance above home-indicator on iOS */
+.fab-safe {
+  bottom: calc(1.75rem + env(safe-area-inset-bottom));
+}
+
+body {
+  background-color: #FAF7F2;
+  color: #1A1F2C;
+  font-family: "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-feature-settings: "cv11", "ss03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ─── Typography utilities ─── */
+.font-serif {
+  font-family: "Fraunces", Georgia, serif;
+  font-optical-sizing: auto;
+}
+
+.font-mono {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-feature-settings: "zero", "ss02";
+}
+
+/* ─── Utility: hide scrollbar ─── */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── Scrollbar (subtle) ─── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #DDD4C2;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B5BBC4;
+}

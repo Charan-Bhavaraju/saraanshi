@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
+  <rect width="180" height="180" rx="38" fill="#0E5C5C"/>
+  <text
+    x="90"
+    y="125"
+    text-anchor="middle"
+    font-family="Georgia, serif"
+    font-size="105"
+    font-weight="500"
+    font-style="italic"
+    fill="#FFFFFF"
+  >S</text>
+</svg>

@@ -1,0 +1,29 @@
+# keys and secrets
+keys.txt
+.env.local
+.env*.local
+
+# Next.js
+.next/
+out/
+build/
+
+# dependencies
+node_modules/
+
+# misc
+.DS_Store
+*.pem
+.vercel
+
+# debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# drizzle
+drizzle/
