@@ -3,6 +3,7 @@ import {
   Fraunces,
   Geist,
   JetBrains_Mono,
+  Noto_Sans_Telugu,
 } from 'next/font/google'
 import './globals.css'
 import ServiceWorkerRegistrar from '@/components/ServiceWorkerRegistrar'
@@ -24,6 +25,14 @@ const geist = Geist({
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
+  display: 'swap',
+  weight: ['400', '500'],
+})
+
+// Loaded for correct Telugu Unicode rendering in transcript segments.
+// Used as a CSS fallback via font-family in SegmentList, not a Next.js variable.
+const notoSansTelugu = Noto_Sans_Telugu({
+  subsets: ['telugu'],
   display: 'swap',
   weight: ['400', '500'],
 })
@@ -59,7 +68,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${geist.variable} ${jetbrainsMono.variable}`}
+      className={`${fraunces.variable} ${geist.variable} ${jetbrainsMono.variable} ${notoSansTelugu.className}`}
     >
       <head>
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.svg" />

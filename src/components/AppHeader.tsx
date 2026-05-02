@@ -8,6 +8,7 @@ import UserMenu from './UserMenu'
 const TABS = [
   { href: '/today', label: 'Today' },
   { href: '/contacts', label: 'Participants' },
+  { href: '/interviews', label: 'Interviews' },
   { href: '/tasks', label: 'Tasks' },
 ] as const
 

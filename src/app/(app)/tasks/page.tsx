@@ -4,6 +4,8 @@ import { isNull, eq, asc } from 'drizzle-orm'
 import type { TaskWithContact } from '@/types/database'
 import TasksClient from './_components/TasksClient'
 
+export const dynamic = 'force-dynamic'
+
 async function getTasks(): Promise<TaskWithContact[]> {
   const rows = await db
     .select({

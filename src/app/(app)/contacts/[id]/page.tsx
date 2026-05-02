@@ -3,6 +3,8 @@ import { contacts } from '@/db/schema'
 import { eq, isNull, and } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+
+export const dynamic = 'force-dynamic'
 import TypePill from '../_components/TypePill'
 import ContactDetailClient from './ContactDetailClient'
 

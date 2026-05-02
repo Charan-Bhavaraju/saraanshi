@@ -1,10 +1,13 @@
 import { db } from '@/db'
-import { contacts, tasks } from '@/db/schema'
-import { isNull, eq, and, gte, lt, inArray } from 'drizzle-orm'
+import { contacts, tasks, interviews } from '@/db/schema'
+import { isNull, eq, and, gte, lt, inArray, desc } from 'drizzle-orm'
 import { startOfDay, endOfDay, addDays, getGreeting, formatDayHeader } from '@/lib/utils'
 import Link from 'next/link'
 import { unstable_cache } from 'next/cache'
 import TodayTaskList from './_components/TodayTaskList'
+import StatusBadge from '../interviews/[id]/_components/StatusBadge'
+
+export const dynamic = 'force-dynamic'
 
 // Revalidate every 60 s; also busted via revalidateTag('today-stats') in task actions
 const getStats = unstable_cache(async function getStats() {
@@ -91,6 +94,22 @@ const getStats = unstable_cache(async function getStats() {
   }
 }, ['today-stats'], { revalidate: 60 })
 
+async function getRecentInterviews() {
+  return db
+    .select({
+      id: interviews.id,
+      participantCode: interviews.participantCode,
+      status: interviews.status,
+      conductedAt: interviews.conductedAt,
+      contactName: contacts.displayName,
+    })
+    .from(interviews)
+    .leftJoin(contacts, eq(interviews.contactId, contacts.id))
+    .where(isNull(interviews.deletedAt))
+    .orderBy(desc(interviews.createdAt))
+    .limit(4)
+}
+
 function getWelcomeMessage(interviewed: number, inConversation: number): string {
   if (interviewed >= 30) return 'You\'ve reached your interview goal — incredible work, Sravya!'
   if (interviewed > 0) return `${interviewed} interview${interviewed === 1 ? '' : 's'} completed — you\'re building something meaningful.`
@@ -99,7 +118,7 @@ function getWelcomeMessage(interviewed: number, inConversation: number): string 
 }
 
 export default async function TodayPage() {
-  const stats = await getStats()
+  const [stats, recentInterviews] = await Promise.all([getStats(), getRecentInterviews()])
   const greeting = getGreeting()
   const dayLabel = formatDayHeader()
 
@@ -164,7 +183,7 @@ export default async function TodayPage() {
           />
         </div>
 
-        {/* Recent interviews — Phase 2 placeholder */}
+        {/* Recent interviews */}
         <div
           className="rounded-[14px] p-5 flex flex-col"
           style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}
@@ -176,30 +195,59 @@ export default async function TodayPage() {
             >
               Recent interviews
             </h2>
-            <span
-              className="text-xs font-medium px-2 py-0.5 rounded-full"
-              style={{ background: '#F5F1E9', color: '#8A929C', fontSize: 11 }}
-            >
-              Phase 2
-            </span>
+            <Link href="/interviews" className="text-sm" style={{ color: '#0E5C5C', fontSize: 13 }}>
+              View all →
+            </Link>
           </div>
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 py-8">
-            <div
-              className="flex items-center justify-center rounded-full"
-              style={{ width: 44, height: 44, minWidth: 44, minHeight: 44, background: '#F5F1E9' }}
-            >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                <path d="M4 4h12v8a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" stroke="#B5BBC4" strokeWidth="1.4" strokeLinejoin="round" />
-                <path d="M7 8h6M7 11h4" stroke="#B5BBC4" strokeWidth="1.4" strokeLinecap="round" />
-              </svg>
+          {recentInterviews.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 py-8">
+              <div
+                className="flex items-center justify-center rounded-full"
+                style={{ width: 44, height: 44, minWidth: 44, minHeight: 44, background: '#F5F1E9' }}
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                  <path d="M4 4h12v8a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" stroke="#B5BBC4" strokeWidth="1.4" strokeLinejoin="round" />
+                  <path d="M7 8h6M7 11h4" stroke="#B5BBC4" strokeWidth="1.4" strokeLinecap="round" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium" style={{ color: '#4A5263' }}>No interviews yet</p>
+                <p className="text-xs mt-1" style={{ color: '#8A929C' }}>Start logging your fieldwork</p>
+              </div>
+              <Link
+                href="/interviews/new"
+                className="text-xs font-medium px-3 py-1.5 rounded-lg"
+                style={{ background: '#E2EEEC', color: '#0E5C5C' }}
+              >
+                New interview →
+              </Link>
             </div>
-            <div className="text-center">
-              <p className="text-sm font-medium" style={{ color: '#4A5263' }}>No interviews yet</p>
-              <p className="text-xs mt-1 leading-relaxed" style={{ color: '#8A929C' }}>
-                Audio upload and transcription<br />coming in Phase 2
-              </p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {recentInterviews.map(interview => (
+                <Link
+                  key={interview.id}
+                  href={`/interviews/${interview.id}`}
+                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition-colors hover:bg-[#F5F1E9]"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {interview.participantCode && (
+                      <span
+                        className="text-xs font-medium px-2 py-0.5 rounded shrink-0"
+                        style={{ background: '#E2EEEC', color: '#0E5C5C', fontFamily: 'var(--font-mono)' }}
+                      >
+                        {interview.participantCode}
+                      </span>
+                    )}
+                    <span className="text-sm truncate" style={{ color: '#1A1F2C' }}>
+                      {interview.contactName ?? 'Unknown participant'}
+                    </span>
+                  </div>
+                  <StatusBadge status={interview.status} />
+                </Link>
+              ))}
             </div>
-          </div>
+          )}
         </div>
 
       </div>

@@ -12,6 +12,18 @@ export type {
   TaskStatus,
 } from '@/db/schema/tasks'
 
+export type {
+  Interview,
+  InterviewInsert,
+  InterviewType,
+  InterviewLanguage,
+  InterviewStatus,
+  Transcript,
+  TranscriptInsert,
+  UsageLog,
+  TranscriptSegment,
+} from '@/db/schema/interviews'
+
 // Task with its linked contact populated (for display)
 export type TaskWithContact = import('@/db/schema/tasks').Task & {
   contact: Pick<
@@ -23,6 +35,14 @@ export type TaskWithContact = import('@/db/schema/tasks').Task & {
 // Contact with its parent populated (for detail view)
 export type ContactWithParent = import('@/db/schema/contacts').Contact & {
   parent: Pick<
+    import('@/db/schema/contacts').Contact,
+    'id' | 'displayName' | 'organization' | 'type'
+  > | null
+}
+
+// Interview with its linked contact populated
+export type InterviewWithContact = import('@/db/schema/interviews').Interview & {
+  contact: Pick<
     import('@/db/schema/contacts').Contact,
     'id' | 'displayName' | 'organization' | 'type'
   > | null

@@ -3,6 +3,8 @@ import { contacts } from '@/db/schema'
 import { isNull } from 'drizzle-orm'
 import { desc } from 'drizzle-orm'
 import ContactsClient from './_components/ContactsClient'
+
+export const dynamic = 'force-dynamic'
 import { headers } from 'next/headers'
 
 async function getContacts() {
