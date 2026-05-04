@@ -21,7 +21,7 @@ export async function createInterview(input: z.infer<typeof InterviewCreateSchem
       language: parsed.language,
       contextNotes: parsed.contextNotes ?? null,
       consentRecordedAt: parsed.consentRecordedAt ? new Date(parsed.consentRecordedAt) : null,
-      status: 'draft',
+      status: 'created',
     })
     .returning()
 

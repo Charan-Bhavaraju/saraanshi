@@ -50,14 +50,22 @@ export function getTaskGroup(dueAt: Date | string | null): TaskGroup {
 }
 
 export function getGreeting(): string {
-  const h = new Date().getHours()
+  const h = parseInt(
+    new Intl.DateTimeFormat('en-IN', { hour: 'numeric', hour12: false, timeZone: 'Asia/Kolkata' }).format(new Date()),
+    10,
+  )
   if (h < 12) return 'Good morning'
   if (h < 17) return 'Good afternoon'
   return 'Good evening'
 }
 
 export function formatDayHeader(): string {
-  return format(new Date(), 'EEEE, d MMMM')
+  return new Intl.DateTimeFormat('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'Asia/Kolkata',
+  }).format(new Date())
 }
 
 export { startOfDay, endOfDay, addDays, endOfWeek, isToday, isTomorrow, isThisWeek }

@@ -35,7 +35,7 @@ export default function TranscriptViewer({ interviewId, audioUrl, segments, init
   }, [interviewId, speakerMap])
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 rounded-[14px] overflow-hidden" style={{ border: '1px solid #ECE6D9' }}>
+    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1fr_1.5fr_1fr] gap-0 rounded-[14px] overflow-hidden" style={{ border: '1px solid #ECE6D9' }}>
       {/* Audio pane */}
       <div
         className="p-5 flex flex-col gap-0"
@@ -57,7 +57,7 @@ export default function TranscriptViewer({ interviewId, audioUrl, segments, init
       {/* Transcript pane */}
       <div
         className="flex flex-col"
-        style={{ background: '#FFFFFF', maxHeight: 620, minHeight: 400 }}
+        style={{ background: '#FFFFFF', maxHeight: 620, minHeight: 400, borderRight: '1px solid #ECE6D9' }}
       >
         <div className="px-5 pt-5 pb-0">
           <h3
@@ -75,6 +75,27 @@ export default function TranscriptViewer({ interviewId, audioUrl, segments, init
             speakerMap={speakerMap}
             onUpdateSpeaker={handleUpdateSpeaker}
           />
+        </div>
+      </div>
+
+      {/* Markers pane — Phase 3 */}
+      <div
+        className="hidden xl:flex flex-col p-5"
+        style={{ background: '#FDFCF9', maxHeight: 620, minHeight: 400 }}
+      >
+        <h3
+          className="text-sm font-medium mb-4"
+          style={{ color: '#8A929C', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 11 }}
+        >
+          Markers
+        </h3>
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <path d="M6 8h16M6 14h10M6 20h7" stroke="#DDD4C2" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <p className="text-xs" style={{ color: '#C5BBAD' }}>
+            Tag themes and<br />key moments here
+          </p>
         </div>
       </div>
     </div>

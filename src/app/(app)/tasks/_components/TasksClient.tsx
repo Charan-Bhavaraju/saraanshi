@@ -2,6 +2,7 @@ import type { TaskWithContact } from '@/types/database'
 import { getTaskGroup, addDays, endOfWeek } from '@/lib/utils'
 import { format } from 'date-fns'
 import TaskSection from './TaskSection'
+import TaskItem from './TaskItem'
 import FAB from './FAB'
 import Link from 'next/link'
 
@@ -63,6 +64,7 @@ export default function TasksClient({ tasks }: { tasks: TaskWithContact[] }) {
         title="Today"
         dateLabel={format(now, 'EEE d MMM').toUpperCase()}
         tasks={groups.today}
+        emptyLabel="Nothing due today"
       />
 
       <TaskSection
@@ -86,7 +88,11 @@ export default function TasksClient({ tasks }: { tasks: TaskWithContact[] }) {
           >
             {groups.done.length} completed task{groups.done.length !== 1 ? 's' : ''}
           </summary>
-          <TaskSection title="Completed" tasks={groups.done} />
+          <div>
+            {groups.done.map(task => (
+              <TaskItem key={task.id} task={task} />
+            ))}
+          </div>
         </details>
       )}
 

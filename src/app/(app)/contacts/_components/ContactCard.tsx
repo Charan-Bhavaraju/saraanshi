@@ -10,7 +10,7 @@ export default function ContactCard({ contact }: { contact: Contact }) {
 
   return (
     <div
-      className="rounded-xl p-3 transition-all select-none cursor-pointer"
+      className="rounded-xl p-3 transition-all select-none cursor-pointer min-w-0"
       style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}
       onClick={() => router.push(`/contacts/${contact.id}`)}
       onMouseEnter={e => {

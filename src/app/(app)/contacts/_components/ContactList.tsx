@@ -3,7 +3,7 @@ import ContactCard from './ContactCard'
 
 const STATUS_ORDER: ContactStatus[] = [
   'lead', 'contacted', 'interested', 'scheduled',
-  'interviewed', 'declined', 'done', 'no_response',
+  'interviewed', 'declined', 'done', 'no_response', 'no_reply',
 ]
 
 const STATUS_LABELS: Record<ContactStatus, string> = {
@@ -15,6 +15,7 @@ const STATUS_LABELS: Record<ContactStatus, string> = {
   declined: 'Declined',
   done: 'Done',
   no_response: 'No Reply',
+  no_reply: 'No Reply',
 }
 
 export default function ContactList({ contacts }: { contacts: Contact[] }) {

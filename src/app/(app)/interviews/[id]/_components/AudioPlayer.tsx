@@ -198,15 +198,15 @@ export default function AudioPlayer({ audioUrl, onTimeUpdate, seekTo }: Props) {
           disabled={!isReady}
           className="px-3 py-2 rounded-lg text-xs font-medium transition-all disabled:opacity-40"
           style={{
-            border: '1px solid #ECE6D9',
-            background: '#FFFFFF',
-            color: '#4A5263',
+            border: `1px solid ${speedIdx > 0 ? '#B2D8D4' : '#ECE6D9'}`,
+            background: speedIdx > 0 ? '#E2EEEC' : '#FFFFFF',
+            color: speedIdx > 0 ? '#0E5C5C' : '#4A5263',
             fontFamily: 'var(--font-mono)',
             minWidth: 52,
           }}
           title="Change playback speed"
         >
-          {SPEEDS[speedIdx]}×
+          {SPEEDS[speedIdx]}× ▾
         </button>
       </div>
 

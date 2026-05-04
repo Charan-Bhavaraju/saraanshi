@@ -26,6 +26,7 @@ export const interviewLanguageEnum = pgEnum('interview_language', [
 
 export const interviewStatusEnum = pgEnum('interview_status', [
   'draft',
+  'created',
   'uploading',
   'uploaded',
   'transcribing',
@@ -45,7 +46,7 @@ export const interviews = pgTable('interviews', {
   durationSeconds: integer('duration_seconds'),
   audioR2Key: text('audio_r2_key'),
   audioSizeBytes: bigint('audio_size_bytes', { mode: 'number' }),
-  status: interviewStatusEnum('status').notNull().default('draft'),
+  status: interviewStatusEnum('status').notNull().default('created'),
   consentRecordedAt: timestamp('consent_recorded_at', { withTimezone: true }),
   contextNotes: text('context_notes'),
   metadata: jsonb('metadata'),

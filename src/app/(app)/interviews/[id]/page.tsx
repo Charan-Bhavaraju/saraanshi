@@ -106,7 +106,7 @@ export default async function InterviewDetailPage({
   const segments = (transcript?.segments as TranscriptSegment[] | null) ?? []
   const meta = interview.metadata as { sarvamJobId?: string; speakerMap?: Record<string, string> } | null
   const speakerMap = meta?.speakerMap ?? {}
-  const showUploadZone = ['draft', 'uploading', 'uploaded'].includes(interview.status)
+  const showUploadZone = ['draft', 'created', 'uploading', 'uploaded'].includes(interview.status)
   const showTranscribeButton = interview.status === 'uploaded'
   const showTranscribing = interview.status === 'transcribing'
   const showViewer = ['transcribed', 'reviewed', 'analyzed'].includes(interview.status) && audioUrl && segments.length > 0

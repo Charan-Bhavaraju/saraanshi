@@ -9,6 +9,7 @@ export const revalidate = 30
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   draft:        { label: 'Draft',        bg: '#F5F1E9', color: '#8A929C' },
+  created:      { label: 'No audio',     bg: '#F5F1E9', color: '#8A929C' },
   uploading:    { label: 'Uploading',    bg: '#F5EBD3', color: '#B8842A' },
   uploaded:     { label: 'Uploaded',     bg: '#F5EBD3', color: '#B8842A' },
   transcribing: { label: 'Transcribing', bg: '#F5EBD3', color: '#B8842A' },

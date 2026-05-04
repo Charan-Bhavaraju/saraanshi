@@ -127,7 +127,7 @@ export default async function TodayPage() {
 
         {/* Today's plan */}
         <div
-          className="rounded-[14px] p-5"
+          className="rounded-[14px] p-5 min-h-[260px]"
           style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}
         >
           <div className="flex items-baseline justify-between mb-4">
@@ -150,7 +150,7 @@ export default async function TodayPage() {
 
         {/* Recent interviews */}
         <div
-          className="rounded-[14px] p-5 flex flex-col"
+          className="rounded-[14px] p-5 flex flex-col min-h-[260px]"
           style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}
         >
           <div className="flex items-baseline justify-between mb-4">

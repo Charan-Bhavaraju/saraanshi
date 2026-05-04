@@ -34,7 +34,7 @@ export default function UserMenu({
           className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium"
           style={{ background: '#F7E5EB', color: '#B8456D' }}
         >
-          {initials}
+          SN
         </div>
       </button>
 

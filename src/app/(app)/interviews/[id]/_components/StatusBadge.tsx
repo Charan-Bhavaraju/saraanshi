@@ -2,6 +2,7 @@ import type { InterviewStatus } from '@/types/database'
 
 const CONFIG: Record<InterviewStatus, { label: string; bg: string; color: string; pulse?: boolean }> = {
   draft:        { label: 'Draft',        bg: '#F5F1E9', color: '#8A929C' },
+  created:      { label: 'No audio',     bg: '#F5F1E9', color: '#8A929C' },
   uploading:    { label: 'Uploading',    bg: '#F5EBD3', color: '#B8842A', pulse: true },
   uploaded:     { label: 'Audio ready',  bg: '#F5EBD3', color: '#B8842A' },
   transcribing: { label: 'Transcribing', bg: '#F5EBD3', color: '#B8842A', pulse: true },

@@ -25,7 +25,7 @@ const COLUMNS: { status: ContactStatus; label: string; accent: string }[] = [
   { status: 'interested',  label: 'Interested',  accent: '#0E5C5C' },
   { status: 'scheduled',   label: 'Scheduled',   accent: '#4A5263' },
   { status: 'interviewed', label: 'Interviewed', accent: '#B8456D' },
-  { status: 'no_response', label: 'No Reply',    accent: '#8A929C' },
+  { status: 'no_reply', label: 'No Reply',    accent: '#8A929C' },
 ]
 
 export default function ContactKanban({ contacts: initialContacts }: { contacts: Contact[] }) {
@@ -159,12 +159,12 @@ function KanbanColumn({
           <DraggableCard key={c.id} contact={c} isSource={isSource} />
         ))}
 
-        {contacts.length === 0 && (
+        {contacts.length === 0 && isOver && (
           <div
             className="rounded-lg flex items-center justify-center h-16 text-xs transition-all select-none"
-            style={{ color: isOver ? accent : '#B5BBC4' }}
+            style={{ color: accent }}
           >
-            {isOver ? 'Drop here' : 'Empty'}
+            Drop here
           </div>
         )}
       </div>
