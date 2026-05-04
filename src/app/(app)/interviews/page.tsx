@@ -1,6 +1,6 @@
 import { db } from '@/db'
 import { interviews, contacts } from '@/db/schema'
-import { isNull, desc, eq } from 'drizzle-orm'
+import { isNull, desc, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import type { InterviewWithContact } from '@/types/database'
 
@@ -28,23 +28,13 @@ async function getInterviews(): Promise<InterviewWithContact[]> {
   if (rows.length === 0) return []
 
   const contactIds = [...new Set(rows.flatMap(r => r.contactId ? [r.contactId] : []))]
-  const contactRows = contactIds.length > 0
-    ? await db.select({
-        id: contacts.id,
-        displayName: contacts.displayName,
-        organization: contacts.organization,
-        type: contacts.type,
-      }).from(contacts).where(eq(contacts.id, contactIds[0]))
-    : []
-
-  // fetch all contact IDs properly
   const allContacts = contactIds.length > 0
     ? await db.select({
         id: contacts.id,
         displayName: contacts.displayName,
         organization: contacts.organization,
         type: contacts.type,
-      }).from(contacts)
+      }).from(contacts).where(inArray(contacts.id, contactIds))
     : []
 
   const contactMap = Object.fromEntries(allContacts.map(c => [c.id, c]))
@@ -124,9 +114,8 @@ function InterviewRow({ interview }: { interview: InterviewWithContact }) {
   return (
     <Link
       href={`/interviews/${interview.id}`}
-      className="flex items-center gap-4 px-5 py-4 rounded-[14px] transition-all group"
-      style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}
-      onMouseEnter={() => {}}
+      className="flex items-center gap-4 px-5 py-4 rounded-[14px] transition-all group hover:bg-[#FAFAF8]"
+      style={{ border: '1px solid #ECE6D9' }}
     >
       {/* Participant code */}
       <div

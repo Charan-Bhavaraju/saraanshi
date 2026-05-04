@@ -52,6 +52,21 @@ export async function updateInterview(input: z.infer<typeof InterviewUpdateSchem
 export async function markAudioUploaded(input: z.infer<typeof InterviewAudioSchema>) {
   const parsed = InterviewAudioSchema.parse(input)
 
+  // Invalidate old transcripts — they belong to the previous audio file
+  await db
+    .update(transcripts)
+    .set({ isCurrent: false })
+    .where(eq(transcripts.interviewId, parsed.id))
+
+  // Preserve speakerMap but clear old Sarvam job ID so the poller can't resurface it
+  const [row] = await db
+    .select({ metadata: interviews.metadata })
+    .from(interviews)
+    .where(eq(interviews.id, parsed.id))
+    .limit(1)
+  const prev = (row?.metadata as Record<string, unknown> | null) ?? {}
+  const { sarvamJobId: _dropped, ...metaWithoutJob } = prev as { sarvamJobId?: string } & Record<string, unknown>
+
   await db
     .update(interviews)
     .set({
@@ -59,6 +74,7 @@ export async function markAudioUploaded(input: z.infer<typeof InterviewAudioSche
       audioSizeBytes: parsed.audioSizeBytes,
       durationSeconds: parsed.durationSeconds ?? null,
       status: 'uploaded',
+      metadata: metaWithoutJob,
     })
     .where(and(eq(interviews.id, parsed.id), isNull(interviews.deletedAt)))
 
@@ -93,6 +109,25 @@ export async function suggestParticipantCode(type: 'patient' | 'doctor' | 'other
 
   const next = nums.length === 0 ? 1 : Math.max(...nums) + 1
   return `${prefix}-${String(next).padStart(3, '0')}`
+}
+
+// Persist speaker display names for an interview, keyed by Sarvam speaker ID.
+// Merges into existing metadata so sarvamJobId is not overwritten.
+export async function updateSpeakerMap(
+  interviewId: string,
+  speakerMap: Record<string, string>,
+) {
+  const [row] = await db
+    .select({ metadata: interviews.metadata })
+    .from(interviews)
+    .where(and(eq(interviews.id, interviewId), isNull(interviews.deletedAt)))
+    .limit(1)
+
+  const existing = (row?.metadata as Record<string, unknown> | null) ?? {}
+  await db
+    .update(interviews)
+    .set({ metadata: { ...existing, speakerMap } })
+    .where(and(eq(interviews.id, interviewId), isNull(interviews.deletedAt)))
 }
 
 // Fetch transcript for an interview (most recent current version)

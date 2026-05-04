@@ -92,17 +92,17 @@ export default function AudioPlayer({ audioUrl, onTimeUpdate, seekTo }: Props) {
   }
 
   // Keyboard shortcuts: Space, ←, →
+  // Uses refs so the handler is stable — deps array left empty intentionally.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      // Only handle if no input is focused
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return
-      if (e.code === 'Space') { e.preventDefault(); togglePlay() }
-      if (e.code === 'ArrowLeft') { e.preventDefault(); skip(-5) }
-      if (e.code === 'ArrowRight') { e.preventDefault(); skip(5) }
+      if (e.code === 'Space') { e.preventDefault(); wsRef.current?.playPause() }
+      if (e.code === 'ArrowLeft') { e.preventDefault(); wsRef.current?.setTime(Math.max(0, (wsRef.current.getCurrentTime() - 5))) }
+      if (e.code === 'ArrowRight') { e.preventDefault(); wsRef.current?.setTime(Math.min(wsRef.current.getDuration(), wsRef.current.getCurrentTime() + 5)) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  })
+  }, []) // stable: reads from wsRef directly, no stale closure risk
 
   if (loadError) {
     return (

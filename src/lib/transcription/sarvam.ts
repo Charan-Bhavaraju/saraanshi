@@ -1,156 +1,150 @@
+import { SarvamAIClient } from 'sarvamai'
+import { writeFileSync, readFileSync, existsSync, rmSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import type { TranscriptionProvider, TranscriptionParams, TranscriptionResult, TranscriptSegment } from './types'
 
-// Sarvam AI pricing (pay-as-you-go as of 2025):
-// ~₹1.5 per minute of audio = 150 paise/min = 2.5 paise/second
 const COST_PAISE_PER_SECOND = 2.5
 
-// Sarvam language codes
 const LANG_MAP: Record<string, string> = {
   en: 'en-IN',
   te: 'te-IN',
-  mixed: 'te-IN', // use Telugu as primary hint; Sarvam handles code-switching automatically
+  mixed: 'unknown',
 }
 
-type SarvamWord = {
-  word: string
-  start: number
-  end: number
+function log(msg: string) {
+  console.log(`[sarvam] ${new Date().toISOString().substring(11, 23)}  ${msg}`)
 }
 
-type SarvamSegment = {
-  start: number
-  end: number
-  text: string
-  words?: SarvamWord[]
+function makeClient(): SarvamAIClient {
+  const key = process.env.SARVAM_API_KEY
+  if (!key) throw new Error('SARVAM_API_KEY env var not set')
+  return new SarvamAIClient({ apiSubscriptionKey: key })
 }
 
-type SarvamDiarizationSegment = {
-  speaker: string
-  start: number
-  end: number
-}
-
-type SarvamResponse = {
-  transcript?: string
-  language_code?: string
-  // v1 API: time_stamps array
-  time_stamps?: Array<{ start_time: number; end_time: number; word: string }>
-  // v2 API: segments with optional diarization
-  segments?: SarvamSegment[]
-  diarization?: { segments?: SarvamDiarizationSegment[] }
-  request_id?: string
-}
+export type BatchSubmitResult = { jobId: string }
 
 export class SarvamProvider implements TranscriptionProvider {
   readonly name = 'sarvam'
-  private readonly apiKey: string
 
-  constructor(apiKey: string) {
-    this.apiKey = apiKey
-  }
-
+  // Not used directly — present to satisfy the interface
   async transcribe(params: TranscriptionParams): Promise<TranscriptionResult> {
-    const { audioUrl, language, zeroRetention = false } = params
-    const languageCode = LANG_MAP[language] ?? 'te-IN'
-
-    // Sarvam accepts audio_url directly — no need to proxy through Vercel
-    const body = JSON.stringify({
-      audio_url: audioUrl,
-      language_code: languageCode,
-      model: 'saaras:v2',
-      with_diarization: true,
-      with_timestamps: true,
-      // Zero-retention opt-in for production:
-      // On Sarvam enterprise, setting this prevents audio/transcripts being
-      // used for model training. Confirm with Sarvam before going live.
-      ...(zeroRetention ? { data_retention: false } : {}),
-    })
-
-    const res = await fetch('https://api.sarvam.ai/speech-to-text', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-subscription-key': this.apiKey,
-      },
-      body,
-    })
-
-    if (!res.ok) {
-      const errorText = await res.text().catch(() => res.statusText)
-      // If JSON body approach fails (older API that needs multipart), try multipart
-      if (res.status === 415 || res.status === 422) {
-        return this.transcribeMultipart(params)
-      }
-      throw new Error(`Sarvam API error ${res.status}: ${errorText}`)
-    }
-
-    const raw: SarvamResponse = await res.json()
-    const requestId = raw.request_id ?? `sarvam-${Date.now()}`
-
-    const segments = this.parseSegments(raw)
-    const fullText = segments.map(s => s.text).join(' ')
-    const wordCount = fullText.split(/\s+/).filter(Boolean).length
-    const durationSeconds = segments.length > 0 ? segments[segments.length - 1].end : 0
-
-    return {
-      segments,
-      fullText,
-      wordCount,
-      language: raw.language_code ?? languageCode,
-      rawResponse: raw,
-      requestId,
-      durationSeconds,
-      estimatedCostInrPaise: Math.ceil(durationSeconds * COST_PAISE_PER_SECOND),
-    }
+    const { jobId } = await this.submitBatchJob(params.audioUrl, params.language, 'sync')
+    const job = makeClient().speechToTextJob.getJob(jobId)
+    await job.waitUntilComplete(5, 600)
+    return this.downloadAndParse(jobId)
   }
 
-  // Fallback: send audio as multipart form data (for Sarvam API versions that
-  // don't accept audio_url). Downloads the file server-side — only used as fallback.
-  private async transcribeMultipart(params: TranscriptionParams): Promise<TranscriptionResult> {
-    const { audioUrl, language } = params
-    const languageCode = LANG_MAP[language] ?? 'te-IN'
+  // ── Submit: download from R2 → write temp file → SDK upload → start ───────
 
-    // Fetch the audio from R2 presigned URL
+  async submitBatchJob(
+    audioUrl: string,
+    language: string,
+    interviewId: string,
+  ): Promise<BatchSubmitResult> {
+    const langCode = LANG_MAP[language] ?? 'unknown'
+    log(`Creating batch job  language=${langCode}`)
+
+    const client = makeClient()
+    const job = await client.speechToTextJob.createJob({
+      model: 'saaras:v3',
+      mode: 'transcribe',
+      languageCode: langCode as never,
+      withTimestamps: true,
+      withDiarization: true,
+      numSpeakers: 2,
+    })
+
+    log(`Job created  job_id=${job.jobId}`)
+
+    // Download from R2 and save to a local temp file — SDK needs a file path
+    const tempAudio = join(tmpdir(), `saaranshi-${interviewId}.mp3`)
+    log(`Fetching audio from R2...`)
+
     const audioRes = await fetch(audioUrl)
     if (!audioRes.ok) throw new Error(`Failed to fetch audio from R2: ${audioRes.status}`)
+    const buf = await audioRes.arrayBuffer()
+    writeFileSync(tempAudio, Buffer.from(buf))
+    log(`Saved to temp  size=${(buf.byteLength / 1024 / 1024).toFixed(1)} MB`)
 
-    const audioBuffer = await audioRes.arrayBuffer()
-    const contentType = audioRes.headers.get('content-type') ?? 'audio/mpeg'
-    const ext = contentType.includes('mp4') || contentType.includes('m4a') ? 'm4a'
-      : contentType.includes('wav') ? 'wav'
-      : contentType.includes('webm') ? 'webm'
-      : 'mp3'
-
-    const formData = new FormData()
-    formData.append('file', new Blob([audioBuffer], { type: contentType }), `audio.${ext}`)
-    formData.append('language_code', languageCode)
-    formData.append('model', 'saaras:v2')
-    formData.append('with_diarization', 'true')
-    formData.append('with_timestamps', 'true')
-
-    const res = await fetch('https://api.sarvam.ai/speech-to-text', {
-      method: 'POST',
-      headers: { 'api-subscription-key': this.apiKey },
-      body: formData,
-    })
-
-    if (!res.ok) {
-      const errorText = await res.text().catch(() => res.statusText)
-      throw new Error(`Sarvam multipart error ${res.status}: ${errorText}`)
+    try {
+      log(`Uploading to Sarvam...`)
+      await job.uploadFiles([tempAudio])
+      log(`Upload complete — starting job`)
+      await job.start()
+      log(`Job started  job_id=${job.jobId}`)
+    } finally {
+      try { rmSync(tempAudio) } catch { /* ignore */ }
     }
 
-    const raw: SarvamResponse = await res.json()
-    const requestId = raw.request_id ?? `sarvam-${Date.now()}`
-    const segments = this.parseSegments(raw)
-    const fullText = segments.map(s => s.text).join(' ')
-    const wordCount = fullText.split(/\s+/).filter(Boolean).length
-    const durationSeconds = segments.length > 0 ? segments[segments.length - 1].end : 0
+    return { jobId: job.jobId }
+  }
+
+  // ── Poll: check status, download output JSON and parse when done ──────────
+
+  async checkBatchJob(jobId: string): Promise<TranscriptionResult | null> {
+    const job = makeClient().speechToTextJob.getJob(jobId)
+    const complete = await job.isComplete()
+    log(`Polled  job_id=${jobId}  complete=${complete}`)
+
+    if (!complete) return null
+
+    if (await job.isFailed()) {
+      throw new Error(`Sarvam batch job failed  job_id=${jobId}`)
+    }
+
+    return this.downloadAndParse(jobId)
+  }
+
+  // ── Download output JSON and parse into TranscriptionResult ───────────────
+
+  private async downloadAndParse(jobId: string): Promise<TranscriptionResult> {
+    const job = makeClient().speechToTextJob.getJob(jobId)
+    const outputDir = join(tmpdir(), `saaranshi-out-${jobId}`)
+    log(`Downloading output  dir=${outputDir}`)
+
+    try {
+      await job.downloadOutputs(outputDir)
+
+      // SDK names output as {inputBasename}.json — find it dynamically
+      // since the input filename includes the interview ID
+      const { readdirSync } = await import('fs')
+      const files = existsSync(outputDir) ? readdirSync(outputDir) : []
+      const jsonFile = files.find(f => f.endsWith('.json'))
+      if (!jsonFile) {
+        throw new Error(`No output JSON in dir. Contents: [${files.join(', ')}]`)
+      }
+      const outputPath = join(outputDir, jsonFile)
+      log(`Reading output file  name=${jsonFile}`)
+
+      const raw = JSON.parse(readFileSync(outputPath, 'utf-8')) as Record<string, unknown>
+      log(`Raw transcript length=${String(raw.transcript ?? '').length}  lang=${raw.language_code ?? '?'}`)
+
+      return this.parseOutput(raw)
+    } finally {
+      try { rmSync(outputDir, { recursive: true }) } catch { /* ignore */ }
+    }
+  }
+
+  // ── Parse output JSON ─────────────────────────────────────────────────────
+
+  private parseOutput(raw: Record<string, unknown>): TranscriptionResult {
+    const transcript = String(raw.transcript ?? '').trim()
+    const langCode = String(raw.language_code ?? 'unknown')
+    const requestId = String(raw.request_id ?? `sarvam-${Date.now()}`)
+    const metrics = raw.metrics as { audio_duration?: number } | undefined
+    const durationSeconds = Math.ceil(metrics?.audio_duration ?? 0)
+
+    const segments = this.parseSegments(raw, transcript)
+    const wordCount = transcript.split(/\s+/).filter(Boolean).length
+
+    log(`Parsed  segments=${segments.length}  words=${wordCount}  duration=${durationSeconds}s  cost=₹${(Math.ceil(durationSeconds * COST_PAISE_PER_SECOND) / 100).toFixed(2)}`)
 
     return {
       segments,
-      fullText,
+      fullText: transcript,
       wordCount,
-      language: raw.language_code ?? languageCode,
+      language: langCode,
       rawResponse: raw,
       requestId,
       durationSeconds,
@@ -158,107 +152,78 @@ export class SarvamProvider implements TranscriptionProvider {
     }
   }
 
-  // Parse whichever response shape Sarvam returns into our canonical segment format.
-  // Merges diarization (speaker labels) with transcript segments.
-  private parseSegments(raw: SarvamResponse): TranscriptSegment[] {
-    // v2: segments array with diarization
-    if (raw.segments && raw.segments.length > 0) {
-      const diarSegments = raw.diarization?.segments ?? []
-
-      return raw.segments.map(seg => {
-        const speaker = this.speakerAt(seg.start, diarSegments)
-        return {
-          start: seg.start,
-          end: seg.end,
-          speaker,
-          text: seg.text.trim(),
-          edited: false,
-          editedByHuman: false,
-        }
-      })
-    }
-
-    // v1: flat transcript with word-level time_stamps — group into ~sentence chunks
-    if (raw.time_stamps && raw.time_stamps.length > 0) {
-      return this.groupWordsIntoSegments(
-        raw.time_stamps.map(w => ({ word: w.word, start: w.start_time, end: w.end_time })),
-      )
-    }
-
-    // Minimal fallback: single segment from full transcript text
-    if (raw.transcript) {
-      return [{
-        start: 0,
-        end: 0,
-        speaker: 'SPEAKER_1',
-        text: raw.transcript.trim(),
+  private parseSegments(raw: Record<string, unknown>, fallback: string): TranscriptSegment[] {
+    // 1. Diarized transcript: {entries: [{transcript, start_time_seconds, end_time_seconds, speaker_id}]}
+    type Entry = { transcript?: string; start_time_seconds?: number; end_time_seconds?: number; speaker_id?: string | number }
+    const diarObj = raw.diarized_transcript as { entries?: Entry[] } | null | undefined
+    const entries = diarObj?.entries
+    if (entries && entries.length > 0) {
+      log(`Using diarized entries  count=${entries.length}`)
+      return entries.map(e => ({
+        start: e.start_time_seconds ?? 0,
+        end: e.end_time_seconds ?? 0,
+        speaker: this.normaliseSpeaker(e.speaker_id),
+        text: (e.transcript ?? '').trim(),
         edited: false,
         editedByHuman: false,
-      }]
+      }))
+    }
+
+    // 2. Word-level timestamps: {words: string[], start_time_seconds: number[], end_time_seconds: number[]}
+    type TsObj = { words?: string[]; start_time_seconds?: number[]; end_time_seconds?: number[] }
+    const ts = raw.timestamps as TsObj | null | undefined
+    if (ts?.words && ts.words.length > 0) {
+      log(`Using word timestamps  count=${ts.words.length}`)
+      return this.groupWords(ts.words, ts.start_time_seconds ?? [], ts.end_time_seconds ?? [])
+    }
+
+    // 3. Single-segment fallback from full transcript text
+    if (fallback) {
+      log(`Using single-segment fallback`)
+      return [{ start: 0, end: 0, speaker: 'SPEAKER_1', text: fallback, edited: false, editedByHuman: false }]
     }
 
     return []
   }
 
-  // Find the speaker label active at a given timestamp
-  private speakerAt(ts: number, diarSegments: SarvamDiarizationSegment[]): string {
-    const match = diarSegments.find(d => ts >= d.start && ts < d.end)
-    if (!match) return 'SPEAKER_1'
-    // Normalise Sarvam's speaker labels (SPEAKER_00, SPEAKER_01…) to 1-indexed
-    const idx = parseInt(match.speaker.replace(/\D/g, ''), 10)
-    return `SPEAKER_${isNaN(idx) ? 1 : idx + 1}`
+  private normaliseSpeaker(id: string | number | undefined): string {
+    const n = parseInt(String(id ?? '0'), 10)
+    return `SPEAKER_${isNaN(n) ? 1 : n + 1}`
   }
 
-  // Group flat word list into sentence-sized segments (~10-15 words or pause gap > 1s)
-  private groupWordsIntoSegments(words: SarvamWord[]): TranscriptSegment[] {
-    if (words.length === 0) return []
-
+  private groupWords(words: string[], starts: number[], ends: number[]): TranscriptSegment[] {
+    if (!words.length) return []
     const segments: TranscriptSegment[] = []
-    let group: SarvamWord[] = [words[0]]
+    let group = [{ word: words[0], start: starts[0] ?? 0, end: ends[0] ?? 0 }]
 
     for (let i = 1; i < words.length; i++) {
-      const prev = words[i - 1]
-      const curr = words[i]
-      const gap = curr.start - prev.end
-      const endsWithPunct = /[.?!,]$/.test(prev.word)
-
-      if (gap > 1.0 || endsWithPunct || group.length >= 15) {
-        segments.push({
-          start: group[0].start,
-          end: group[group.length - 1].end,
-          speaker: 'SPEAKER_1',
-          text: group.map(w => w.word).join(' '),
-          edited: false,
-          editedByHuman: false,
-        })
-        group = [curr]
+      const gap = (starts[i] ?? 0) - (ends[i - 1] ?? 0)
+      const punct = /[.?!]$/.test(words[i - 1])
+      if (gap > 1.0 || punct || group.length >= 15) {
+        segments.push(this.makeSegment(group))
+        group = [{ word: words[i], start: starts[i] ?? 0, end: ends[i] ?? 0 }]
       } else {
-        group.push(curr)
+        group.push({ word: words[i], start: starts[i] ?? 0, end: ends[i] ?? 0 })
       }
     }
-
-    if (group.length > 0) {
-      segments.push({
-        start: group[0].start,
-        end: group[group.length - 1].end,
-        speaker: 'SPEAKER_1',
-        text: group.map(w => w.word).join(' '),
-        edited: false,
-        editedByHuman: false,
-      })
-    }
-
+    if (group.length) segments.push(this.makeSegment(group))
     return segments
+  }
+
+  private makeSegment(group: { word: string; start: number; end: number }[]): TranscriptSegment {
+    return {
+      start: group[0].start,
+      end: group[group.length - 1].end,
+      speaker: 'SPEAKER_1',
+      text: group.map(w => w.word).join(' '),
+      edited: false,
+      editedByHuman: false,
+    }
   }
 }
 
-// Singleton for use in API routes — avoids constructing a new client per request
 let _provider: SarvamProvider | null = null
 export function getSarvamProvider(): SarvamProvider {
-  if (!_provider) {
-    const key = process.env.SARVAM_API_KEY
-    if (!key) throw new Error('SARVAM_API_KEY env var not set')
-    _provider = new SarvamProvider(key)
-  }
+  if (!_provider) _provider = new SarvamProvider()
   return _provider
 }

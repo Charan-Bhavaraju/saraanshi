@@ -10,6 +10,9 @@ import UploadZone from './_components/UploadZone'
 import TranscribeButton from './_components/TranscribeButton'
 import TranscriptViewer from './_components/TranscriptViewer'
 import RealtimeStatusWatcher from './_components/RealtimeStatusWatcher'
+import TranscribingPoller from './_components/TranscribingPoller'
+import EditInterviewPanel from './_components/EditInterviewPanel'
+import ReplaceAudioPanel from './_components/ReplaceAudioPanel'
 import type { TranscriptSegment } from '@/types/database'
 
 const LANG_LABELS: Record<string, string> = { en: 'English', te: 'Telugu', mixed: 'Mixed' }
@@ -30,6 +33,14 @@ async function getContact(contactId: string) {
     .where(eq(contacts.id, contactId))
     .limit(1)
   return c ?? null
+}
+
+async function getAllContacts() {
+  return db
+    .select({ id: contacts.id, displayName: contacts.displayName, organization: contacts.organization })
+    .from(contacts)
+    .where(isNull(contacts.deletedAt))
+    .orderBy(contacts.displayName)
 }
 
 async function getCurrentTranscript(interviewId: string) {
@@ -80,9 +91,10 @@ export default async function InterviewDetailPage({
   const interview = await getInterview(id)
   if (!interview) notFound()
 
-  const [contact, transcript] = await Promise.all([
+  const [contact, transcript, allContacts] = await Promise.all([
     interview.contactId ? getContact(interview.contactId) : null,
     getCurrentTranscript(id),
+    getAllContacts(),
   ])
 
   // Only fetch audio URL if we have audio and will show the viewer
@@ -91,6 +103,8 @@ export default async function InterviewDetailPage({
     : null
 
   const segments = (transcript?.segments as TranscriptSegment[] | null) ?? []
+  const meta = interview.metadata as { sarvamJobId?: string; speakerMap?: Record<string, string> } | null
+  const speakerMap = meta?.speakerMap ?? {}
   const showUploadZone = ['draft', 'uploading', 'uploaded'].includes(interview.status)
   const showTranscribeButton = interview.status === 'uploaded'
   const showTranscribing = interview.status === 'transcribing'
@@ -149,6 +163,8 @@ export default async function InterviewDetailPage({
             )}
           </div>
         </div>
+        {/* Edit details — basis-full makes the open form break to its own row */}
+        <EditInterviewPanel interview={interview} contacts={allContacts} />
       </div>
 
       {/* Metadata strip */}
@@ -228,28 +244,46 @@ export default async function InterviewDetailPage({
         </div>
       )}
 
-      {/* Transcribing in-progress state */}
+      {/* Transcribing in-progress state — poller checks Sarvam every 6s */}
       {showTranscribing && (
-        <div
-          className="rounded-[14px] p-6 mb-6 flex items-center gap-4"
-          style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}
-        >
+        <>
+          <TranscribingPoller interviewId={id} />
           <div
-            className="shrink-0 w-10 h-10 rounded-full border-2 animate-spin"
-            style={{ borderColor: '#ECE6D9', borderTopColor: '#B8842A' }}
-          />
-          <div>
-            <p className="text-sm font-medium" style={{ color: '#1A1F2C' }}>Transcribing…</p>
-            <p className="text-xs mt-0.5" style={{ color: '#8A929C' }}>
-              Usually 30–60 seconds. This page will refresh automatically when ready.
-            </p>
+            className="rounded-[14px] p-6 mb-6 flex items-center gap-4"
+            style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}
+          >
+            {/* SVG arc spinner — avoids the CSS border-trick rendering bug */}
+            <svg
+              className="animate-spin shrink-0"
+              width="32" height="32" viewBox="0 0 32 32" fill="none"
+              style={{ color: '#B8842A' }}
+            >
+              <circle cx="16" cy="16" r="13" stroke="currentColor" strokeOpacity="0.15" strokeWidth="3" />
+              <path d="M16 3a13 13 0 0 1 13 13" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium" style={{ color: '#1A1F2C' }}>Transcribing…</p>
+              <p className="text-xs mt-0.5" style={{ color: '#8A929C' }}>
+                Sarvam is processing the audio. Page will refresh automatically when ready.
+              </p>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Transcript viewer */}
       {showViewer && audioUrl && (
-        <TranscriptViewer audioUrl={audioUrl} segments={segments} />
+        <TranscriptViewer
+          interviewId={id}
+          audioUrl={audioUrl}
+          segments={segments}
+          initialSpeakerMap={speakerMap}
+        />
+      )}
+
+      {/* Replace audio — available for any post-upload status */}
+      {['transcribed', 'reviewed', 'analyzed'].includes(interview.status) && (
+        <ReplaceAudioPanel interviewId={id} participantCode={interview.participantCode} />
       )}
 
       {/* Edge case: transcript exists but audio URL failed */}

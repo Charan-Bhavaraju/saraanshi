@@ -4,7 +4,7 @@ import { useTransition } from 'react'
 import Link from 'next/link'
 import type { TaskWithContact } from '@/types/database'
 import { formatDateLabel } from '@/lib/utils'
-import { toggleTaskDone } from '../actions'
+import { toggleTaskDone, deleteTask } from '../actions'
 
 const PRIORITY_COLORS = ['#B5BBC4', '#B8842A', '#B8456D', '#B8456D'] as const
 
@@ -14,6 +14,10 @@ export default function TaskItem({ task }: { task: TaskWithContact }) {
 
   function handleToggle() {
     startTransition(() => toggleTaskDone(task.id, !done))
+  }
+
+  function handleDelete() {
+    startTransition(() => deleteTask(task.id))
   }
 
   return (
@@ -96,6 +100,32 @@ export default function TaskItem({ task }: { task: TaskWithContact }) {
           )}
         </div>
       </div>
+
+      {/* Delete — only on completed tasks */}
+      {done && (
+        <button
+          onClick={handleDelete}
+          disabled={isPending}
+          className="shrink-0 p-1.5 rounded-lg transition-all disabled:opacity-40 group"
+          style={{ border: '1px solid transparent', color: '#B5BBC4' }}
+          title="Delete task"
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLElement).style.borderColor = '#F0C8D4'
+            ;(e.currentTarget as HTMLElement).style.background = '#FDF0F4'
+            ;(e.currentTarget as HTMLElement).style.color = '#B8456D'
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLElement).style.borderColor = 'transparent'
+            ;(e.currentTarget as HTMLElement).style.background = 'transparent'
+            ;(e.currentTarget as HTMLElement).style.color = '#B5BBC4'
+          }}
+          aria-label="Delete task"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M2 3.5h9M5 3.5V2.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 .5.5v1M10.5 3.5l-.6 7a.5.5 0 0 1-.5.5H3.6a.5.5 0 0 1-.5-.5l-.6-7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
     </div>
   )
 }
