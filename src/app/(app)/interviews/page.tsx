@@ -4,7 +4,8 @@ import { isNull, desc, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import type { InterviewWithContact } from '@/types/database'
 
-export const dynamic = 'force-dynamic'
+// Bust immediately via revalidatePath('/interviews') in server actions; 30s TTL as safety-net
+export const revalidate = 30
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   draft:        { label: 'Draft',        bg: '#F5F1E9', color: '#8A929C' },

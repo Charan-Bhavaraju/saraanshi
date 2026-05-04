@@ -41,6 +41,7 @@ async function getAllContacts() {
     .from(contacts)
     .where(isNull(contacts.deletedAt))
     .orderBy(contacts.displayName)
+    .limit(200)
 }
 
 async function getCurrentTranscript(interviewId: string) {

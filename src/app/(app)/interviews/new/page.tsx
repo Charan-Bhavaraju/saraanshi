@@ -3,7 +3,8 @@ import { contacts } from '@/db/schema'
 import { isNull, desc } from 'drizzle-orm'
 import NewInterviewForm from './_components/NewInterviewForm'
 
-export const dynamic = 'force-dynamic'
+// Contacts list rarely changes; 60s cache is fine. Bust via revalidatePath on contact mutations.
+export const revalidate = 60
 
 async function getContacts() {
   return db

@@ -53,53 +53,50 @@ export async function GET(
 
     console.log(`[transcription-status] Saving transcript  interview=${id}  segments=${result.segments.length}  words=${result.wordCount}  cost=₹${(result.estimatedCostInrPaise / 100).toFixed(2)}`)
 
-    const [maxVersionRow] = await db
-      .select({ version: transcripts.version })
-      .from(transcripts)
-      .where(eq(transcripts.interviewId, id))
-      .orderBy(desc(transcripts.version))
-      .limit(1)
+    // Phase 1: get current max version + clear old current flag (both read/write needed before insert)
+    const [[maxVersionRow]] = await Promise.all([
+      db.select({ version: transcripts.version })
+        .from(transcripts)
+        .where(eq(transcripts.interviewId, id))
+        .orderBy(desc(transcripts.version))
+        .limit(1),
+      db.update(transcripts)
+        .set({ isCurrent: false })
+        .where(eq(transcripts.interviewId, id)),
+    ])
     const nextVersion = (maxVersionRow?.version ?? 0) + 1
 
-    await db
-      .update(transcripts)
-      .set({ isCurrent: false })
-      .where(eq(transcripts.interviewId, id))
-
-    await db.insert(transcripts).values({
-      interviewId: id,
-      version: nextVersion,
-      isCurrent: true,
-      language: (interview.language ?? 'mixed') as InterviewLanguage,
-      segments: result.segments,
-      fullText: result.fullText,
-      wordCount: result.wordCount,
-      rawProviderResponse: result.rawResponse,
-    })
-
-    await db.update(interviews)
-      .set({
-        status: 'transcribed',
-        durationSeconds: result.durationSeconds > 0
-          ? result.durationSeconds
-          : interview.durationSeconds,
-      })
-      .where(eq(interviews.id, id))
-
-    console.log(`[transcription-status] Status → transcribed  interview=${id}`)
-
-    try {
-      await db.insert(usageLog).values({
+    // Phase 2: insert transcript + update interview + log usage — all independent, run in parallel
+    await Promise.all([
+      db.insert(transcripts).values({
+        interviewId: id,
+        version: nextVersion,
+        isCurrent: true,
+        language: (interview.language ?? 'mixed') as InterviewLanguage,
+        segments: result.segments,
+        fullText: result.fullText,
+        wordCount: result.wordCount,
+        rawProviderResponse: result.rawResponse,
+      }),
+      db.update(interviews)
+        .set({
+          status: 'transcribed',
+          durationSeconds: result.durationSeconds > 0
+            ? result.durationSeconds
+            : interview.durationSeconds,
+        })
+        .where(eq(interviews.id, id)),
+      db.insert(usageLog).values({
         interviewId: id,
         provider: provider.name,
         operation: 'transcription',
         audioSeconds: result.durationSeconds,
         costInrPaise: result.estimatedCostInrPaise,
         requestId: result.requestId,
-      })
-    } catch {
-      // Duplicate requestId on retry — safe to ignore
-    }
+      }).catch(() => {}), // duplicate requestId on retry — safe to ignore
+    ])
+
+    console.log(`[transcription-status] Status → transcribed  interview=${id}`)
 
     return NextResponse.json({ jobState: 'Completed' })
   } catch (err) {

@@ -1,10 +1,14 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import AudioPlayer from './AudioPlayer'
+import dynamic from 'next/dynamic'
 import SegmentList from './SegmentList'
 import { updateSpeakerMap } from '@/app/(app)/interviews/actions'
 import type { TranscriptSegment } from '@/types/database'
+
+// Deferred: WaveSurfer (~350 KB) is only downloaded when a transcript + audio are present.
+// ssr:false because WaveSurfer uses AudioContext and other browser-only APIs.
+const AudioPlayer = dynamic(() => import('./AudioPlayer'), { ssr: false })
 
 type Props = {
   interviewId: string

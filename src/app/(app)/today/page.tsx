@@ -3,96 +3,61 @@ import { contacts, tasks, interviews } from '@/db/schema'
 import { isNull, eq, and, gte, lt, inArray, desc } from 'drizzle-orm'
 import { startOfDay, endOfDay, addDays, getGreeting, formatDayHeader } from '@/lib/utils'
 import Link from 'next/link'
-import { unstable_cache } from 'next/cache'
 import TodayTaskList from './_components/TodayTaskList'
 import StatusBadge from '../interviews/[id]/_components/StatusBadge'
 
-export const dynamic = 'force-dynamic'
+// Page-level ISR: serve from Vercel edge cache, bust immediately via revalidatePath('/today')
+// called from task/interview server actions. 60s TTL is a safety-net for anything missed.
+export const revalidate = 60
 
-// Revalidate every 60 s; also busted via revalidateTag('today-stats') in task actions
-const getStats = unstable_cache(async function getStats() {
-  const allContacts = await db
-    .select({ id: contacts.id, status: contacts.status })
-    .from(contacts)
-    .where(isNull(contacts.deletedAt))
-
-  const total = allContacts.length
-  const inConversation = allContacts.filter(c =>
-    ['contacted', 'interested', 'scheduled'].includes(c.status),
-  ).length
-  const interviewed = allContacts.filter(c =>
-    ['interviewed', 'done'].includes(c.status),
-  ).length
-
+async function getStats() {
   const now = new Date()
   const todayStart = startOfDay(now)
   const todayEnd = endOfDay(now)
 
-  // Todo tasks due today
-  const todoTasks = await db
-    .select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt, status: tasks.status, contactId: tasks.contactId })
-    .from(tasks)
-    .where(
-      and(
-        isNull(tasks.deletedAt),
-        eq(tasks.status, 'todo'),
-        gte(tasks.dueAt, todayStart),
-        lt(tasks.dueAt, todayEnd),
-      ),
-    )
-    .limit(8)
+  // Phase 1: all independent queries in parallel (saves ~3 sequential round-trips)
+  const [allContacts, todoTasks, doneTasks, tasksDueCount] = await Promise.all([
+    db.select({ id: contacts.id, status: contacts.status })
+      .from(contacts)
+      .where(isNull(contacts.deletedAt)),
 
-  // Done tasks due today (completed tasks we still want to show)
-  const doneTasks = await db
-    .select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt, status: tasks.status, contactId: tasks.contactId })
-    .from(tasks)
-    .where(
-      and(
-        isNull(tasks.deletedAt),
-        eq(tasks.status, 'done'),
-        gte(tasks.dueAt, todayStart),
-        lt(tasks.dueAt, todayEnd),
-      ),
-    )
-    .limit(8)
+    db.select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt, status: tasks.status, contactId: tasks.contactId })
+      .from(tasks)
+      .where(and(isNull(tasks.deletedAt), eq(tasks.status, 'todo'), gte(tasks.dueAt, todayStart), lt(tasks.dueAt, todayEnd)))
+      .limit(8),
 
-  const allTodayTasks = [...todoTasks, ...doneTasks]
-  const taskContactIds = allTodayTasks.flatMap(t => t.contactId ? [t.contactId] : [])
-  const taskContacts =
-    taskContactIds.length > 0
-      ? await db
-          .select({ id: contacts.id, displayName: contacts.displayName, organization: contacts.organization })
-          .from(contacts)
-          .where(inArray(contacts.id, taskContactIds))
-      : []
+    db.select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt, status: tasks.status, contactId: tasks.contactId })
+      .from(tasks)
+      .where(and(isNull(tasks.deletedAt), eq(tasks.status, 'done'), gte(tasks.dueAt, todayStart), lt(tasks.dueAt, todayEnd)))
+      .limit(8),
+
+    db.select({ id: tasks.id })
+      .from(tasks)
+      .where(and(isNull(tasks.deletedAt), eq(tasks.status, 'todo'), gte(tasks.dueAt, todayStart), lt(tasks.dueAt, endOfDay(addDays(now, 1))))),
+  ])
+
+  // Phase 2: task contacts (depends on phase 1 results)
+  const taskContactIds = [...todoTasks, ...doneTasks].flatMap(t => t.contactId ? [t.contactId] : [])
+  const taskContacts = taskContactIds.length > 0
+    ? await db.select({ id: contacts.id, displayName: contacts.displayName, organization: contacts.organization })
+        .from(contacts)
+        .where(inArray(contacts.id, taskContactIds))
+    : []
 
   const contactMap = Object.fromEntries(taskContacts.map(c => [c.id, c]))
-
-  const tasksDueCount = await db
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(
-      and(
-        isNull(tasks.deletedAt),
-        eq(tasks.status, 'todo'),
-        gte(tasks.dueAt, todayStart),
-        lt(tasks.dueAt, endOfDay(addDays(now, 1))),
-      ),
-    )
-
   function attachContact<T extends { contactId: string | null }>(t: T) {
     return { ...t, contact: t.contactId ? contactMap[t.contactId] ?? null : null }
   }
 
   return {
-    total,
-    inConversation,
-    interviewed,
+    total: allContacts.length,
+    inConversation: allContacts.filter(c => ['contacted', 'interested', 'scheduled'].includes(c.status)).length,
+    interviewed: allContacts.filter(c => ['interviewed', 'done'].includes(c.status)).length,
     tasksDueToday: tasksDueCount.length,
     todayTodoTasks: todoTasks.map(attachContact),
     todayDoneTasks: doneTasks.map(attachContact),
   }
-}, ['today-stats'], { revalidate: 60 })
+}
 
 async function getRecentInterviews() {
   return db

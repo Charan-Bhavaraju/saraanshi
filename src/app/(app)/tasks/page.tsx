@@ -4,7 +4,8 @@ import { isNull, eq, asc } from 'drizzle-orm'
 import type { TaskWithContact } from '@/types/database'
 import TasksClient from './_components/TasksClient'
 
-export const dynamic = 'force-dynamic'
+// Bust immediately via revalidatePath('/tasks') in server actions; 30s TTL as safety-net
+export const revalidate = 30
 
 async function getTasks(): Promise<TaskWithContact[]> {
   const rows = await db
