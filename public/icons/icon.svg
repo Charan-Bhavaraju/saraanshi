@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Saaranshi">
+  <title>Saaranshi</title>
+  <rect width="512" height="512" rx="112" fill="#0E5C5C"/>
+  <path d="M 256 128 Q 144 232 144 320 Q 144 392 256 392 Q 368 392 368 320 Q 368 232 256 128 Z" fill="none" stroke="#FAF7F2" stroke-width="14" stroke-linejoin="round"/>
+  <circle cx="256" cy="304" r="20" fill="#FAF7F2"/>
+</svg>

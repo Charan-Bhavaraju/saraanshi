@@ -35,20 +35,18 @@ export default function AppHeader({
       <div className="flex items-center gap-2.5 shrink-0">
         <div
           className="rounded-lg flex items-center justify-center text-white shrink-0"
-          style={{
-            background: '#0E5C5C',
-            width: 28,
-            height: 28,
-            minWidth: 28,
-            minHeight: 28,
-            overflow: 'hidden',
-            fontFamily: 'var(--font-serif)',
-            fontWeight: 500,
-            fontSize: 16,
-            fontStyle: 'italic',
-          }}
+          style={{ background: '#0E5C5C', width: 28, height: 28, minWidth: 28, minHeight: 28 }}
         >
-          S
+          <svg viewBox="0 0 512 512" width="17" height="17" aria-hidden="true" style={{ color: '#FAF7F2' }}>
+            <path
+              d="M 256 128 Q 144 232 144 320 Q 144 392 256 392 Q 368 392 368 320 Q 368 232 256 128 Z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="14"
+              strokeLinejoin="round"
+            />
+            <circle cx="256" cy="304" r="20" fill="currentColor" />
+          </svg>
         </div>
         <span
           className="text-lg hidden sm:block"

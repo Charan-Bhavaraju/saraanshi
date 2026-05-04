@@ -41,6 +41,13 @@ export const metadata: Metadata = {
   title: 'Saaranshi',
   description: 'Research companion for Sravya\'s breast-cancer study',
   manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon.svg', type: 'image/svg+xml' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -70,9 +77,6 @@ export default function RootLayout({
       lang="en"
       className={`${fraunces.variable} ${geist.variable} ${jetbrainsMono.variable} ${notoSansTelugu.className}`}
     >
-      <head>
-        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.svg" />
-      </head>
       <body suppressHydrationWarning>
         <ServiceWorkerRegistrar />
         {children}
