@@ -27,8 +27,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: `Content type "${contentType}" not allowed` }, { status: 400 })
   }
 
-  const r2Key = buildR2Key(participantCode, filename)
-  const presignedUrl = await presignUpload(r2Key, contentType, 3600)
-
-  return NextResponse.json({ presignedUrl, r2Key })
+  try {
+    const r2Key = buildR2Key(participantCode, filename)
+    const presignedUrl = await presignUpload(r2Key, contentType, 3600)
+    return NextResponse.json({ presignedUrl, r2Key })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'R2 error'
+    console.error('[r2/presign]', msg)
+    return NextResponse.json({ error: msg }, { status: 503 })
+  }
 }

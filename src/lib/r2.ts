@@ -6,13 +6,20 @@ const globalForR2 = globalThis as unknown as { _r2?: S3Client }
 
 function getR2Client(): S3Client {
   if (!globalForR2._r2) {
+    const accountId = process.env.R2_ACCOUNT_ID
+    const accessKeyId = process.env.R2_ACCESS_KEY_ID
+    const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY
+
+    if (!accountId || !accessKeyId || !secretAccessKey) {
+      throw new Error(
+        'R2 not configured — set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY in Vercel environment variables'
+      )
+    }
+
     globalForR2._r2 = new S3Client({
       region: 'auto',
-      endpoint: `https://${process.env.R2_ACCOUNT_ID!}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-      },
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: { accessKeyId, secretAccessKey },
     })
   }
   return globalForR2._r2
