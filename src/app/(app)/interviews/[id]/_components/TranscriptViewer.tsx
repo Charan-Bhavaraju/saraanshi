@@ -3,11 +3,25 @@
 import { useState, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import SegmentList from './SegmentList'
-import { updateSpeakerMap } from '@/app/(app)/interviews/actions'
-import type { TranscriptSegment } from '@/types/database'
+import MarkersList from './MarkersList'
+import EditorBar from './EditorBar'
+import SelectionToolbar, { type SelectionData } from './SelectionToolbar'
+import {
+  updateSpeakerMap,
+  createMarker,
+  deleteMarker,
+  updateMarkerNote,
+  saveSegmentEdit,
+  saveTranslation,
+} from '@/app/(app)/interviews/actions'
+import type {
+  TranscriptSegment,
+  TranslationSegment,
+  Marker,
+  MarkerType,
+  InterviewStatus,
+} from '@/types/database'
 
-// Deferred: WaveSurfer (~350 KB) is only downloaded when a transcript + audio are present.
-// ssr:false because WaveSurfer uses AudioContext and other browser-only APIs.
 const AudioPlayer = dynamic(() => import('./AudioPlayer'), { ssr: false })
 
 type Props = {
@@ -15,13 +29,35 @@ type Props = {
   audioUrl: string
   segments: TranscriptSegment[]
   initialSpeakerMap: Record<string, string>
+  transcriptId?: string
+  initialMarkers?: Marker[]
+  initialTranslationSegments?: TranslationSegment[]
+  interviewStatus: InterviewStatus
 }
 
-export default function TranscriptViewer({ interviewId, audioUrl, segments, initialSpeakerMap }: Props) {
+export default function TranscriptViewer({
+  interviewId,
+  audioUrl,
+  segments: initialSegments,
+  initialSpeakerMap,
+  transcriptId,
+  initialMarkers = [],
+  initialTranslationSegments = [],
+  interviewStatus,
+}: Props) {
   const [currentTime, setCurrentTime] = useState(0)
   const [seekTo, setSeekTo] = useState<number | undefined>(undefined)
   const [seekCounter, setSeekCounter] = useState(0)
   const [speakerMap, setSpeakerMap] = useState<Record<string, string>>(initialSpeakerMap)
+
+  const [localSegments, setLocalSegments] = useState<TranscriptSegment[]>(initialSegments)
+  const [localMarkers, setLocalMarkers] = useState<Marker[]>(initialMarkers)
+  const [translationSegments, setTranslationSegments] = useState<TranslationSegment[]>(initialTranslationSegments)
+  const [showTranslation, setShowTranslation] = useState(false)
+  const [isTranslating, setIsTranslating] = useState(false)
+
+  const [selectionData, setSelectionData] = useState<SelectionData | null>(null)
+  const [savingMarker, setSavingMarker] = useState(false)
 
   const handleSeek = useCallback((seconds: number) => {
     setSeekTo(seconds)
@@ -30,12 +66,75 @@ export default function TranscriptViewer({ interviewId, audioUrl, segments, init
 
   const handleUpdateSpeaker = useCallback(async (speakerId: string, label: string) => {
     const next = { ...speakerMap, [speakerId]: label }
-    setSpeakerMap(next) // optimistic
+    setSpeakerMap(next)
     await updateSpeakerMap(interviewId, next)
   }, [interviewId, speakerMap])
 
+  const handleEditSave = useCallback(async (segmentIdx: number, text: string) => {
+    if (!transcriptId) return
+    // Optimistic update
+    setLocalSegments(prev => prev.map((s, i) =>
+      i === segmentIdx
+        ? { ...s, text, edited: true, editedByHuman: true, originalText: s.editedByHuman ? s.originalText : s.text }
+        : s
+    ))
+    await saveSegmentEdit(interviewId, transcriptId, segmentIdx, text)
+  }, [interviewId, transcriptId])
+
+  const handleCreateMarker = useCallback(async (type: MarkerType) => {
+    if (!selectionData || !transcriptId) return
+    setSavingMarker(true)
+    try {
+      const marker = await createMarker({
+        interviewId,
+        transcriptId,
+        segmentIdx: selectionData.segmentIdx,
+        excerpt: selectionData.text,
+        type,
+      })
+      if (marker) setLocalMarkers(prev => [...prev, marker])
+      window.getSelection()?.removeAllRanges()
+      setSelectionData(null)
+    } finally {
+      setSavingMarker(false)
+    }
+  }, [selectionData, interviewId, transcriptId])
+
+  const handleDeleteMarker = useCallback(async (markerId: string) => {
+    // Optimistic removal
+    setLocalMarkers(prev => prev.filter(m => m.id !== markerId))
+    await deleteMarker(markerId, interviewId)
+  }, [interviewId])
+
+  const handleUpdateMarkerNote = useCallback(async (markerId: string, note: string, tags: string[]) => {
+    setLocalMarkers(prev => prev.map(m => m.id === markerId ? { ...m, note, tags } : m))
+    await updateMarkerNote(markerId, interviewId, note, tags)
+  }, [interviewId])
+
+  const handleTranslate = useCallback(async () => {
+    if (!transcriptId) return
+    setIsTranslating(true)
+    try {
+      const res = await fetch(`/api/interviews/${interviewId}/translate`, { method: 'POST' })
+      if (!res.ok) throw new Error('Translation failed')
+      const { segments: translated }: { segments: TranslationSegment[] } = await res.json()
+      setTranslationSegments(translated)
+      await saveTranslation(transcriptId, interviewId, translated)
+      setShowTranslation(true)
+    } catch {
+      // fail silently — no ANTHROPIC_API_KEY or quota
+    } finally {
+      setIsTranslating(false)
+    }
+  }, [transcriptId, interviewId])
+
+  const hasTranslation = translationSegments.length > 0
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1fr_1.5fr_1fr] gap-0 rounded-[14px] overflow-hidden" style={{ border: '1px solid #ECE6D9' }}>
+    <div
+      className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1fr_1.5fr_1fr] gap-0 rounded-[14px] overflow-hidden"
+      style={{ border: '1px solid #ECE6D9' }}
+    >
       {/* Audio pane */}
       <div
         className="p-5 flex flex-col gap-0"
@@ -57,9 +156,22 @@ export default function TranscriptViewer({ interviewId, audioUrl, segments, init
       {/* Transcript pane */}
       <div
         className="flex flex-col"
-        style={{ background: '#FFFFFF', maxHeight: 620, minHeight: 400, borderRight: '1px solid #ECE6D9' }}
+        style={{ background: '#FFFFFF', maxHeight: 680, minHeight: 400, borderRight: '1px solid #ECE6D9' }}
       >
-        <div className="px-5 pt-5 pb-0">
+        {/* Editor bar */}
+        {transcriptId && (
+          <EditorBar
+            interviewId={interviewId}
+            transcriptId={transcriptId}
+            interviewStatus={interviewStatus}
+            hasTranslation={hasTranslation}
+            showTranslation={showTranslation}
+            onToggleTranslation={() => setShowTranslation(v => !v)}
+            onTranslate={handleTranslate}
+            isTranslating={isTranslating}
+          />
+        )}
+        <div className="px-5 pt-4 pb-0">
           <h3
             className="text-sm font-medium mb-3"
             style={{ color: '#8A929C', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 11 }}
@@ -69,35 +181,56 @@ export default function TranscriptViewer({ interviewId, audioUrl, segments, init
         </div>
         <div className="flex-1 overflow-hidden px-5 pb-5">
           <SegmentList
-            segments={segments}
+            segments={localSegments}
             currentTime={currentTime}
             onSeek={handleSeek}
             speakerMap={speakerMap}
             onUpdateSpeaker={handleUpdateSpeaker}
+            onTextSelect={transcriptId ? setSelectionData : undefined}
+            onEditSave={transcriptId ? handleEditSave : undefined}
+            markers={localMarkers}
+            translationSegments={translationSegments}
+            showTranslation={showTranslation}
           />
         </div>
       </div>
 
-      {/* Markers pane — Phase 3 */}
+      {/* Markers pane */}
       <div
         className="hidden xl:flex flex-col p-5"
-        style={{ background: '#FDFCF9', maxHeight: 620, minHeight: 400 }}
+        style={{ background: '#FDFCF9', maxHeight: 680, minHeight: 400 }}
       >
         <h3
           className="text-sm font-medium mb-4"
           style={{ color: '#8A929C', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 11 }}
         >
           Markers
+          {localMarkers.length > 0 && (
+            <span
+              className="ml-2 px-1.5 py-0.5 rounded-full"
+              style={{ background: '#F5F1E9', color: '#4A5263', fontSize: 10, fontWeight: 400, verticalAlign: 'middle' }}
+            >
+              {localMarkers.length}
+            </span>
+          )}
         </h3>
-        <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <path d="M6 8h16M6 14h10M6 20h7" stroke="#DDD4C2" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-          <p className="text-xs" style={{ color: '#C5BBAD' }}>
-            Tag themes and<br />key moments here
-          </p>
-        </div>
+        <MarkersList
+          markers={localMarkers}
+          segments={localSegments}
+          onDelete={handleDeleteMarker}
+          onUpdateNote={handleUpdateMarkerNote}
+        />
       </div>
+
+      {/* Selection toolbar — rendered at fixed position in viewport */}
+      {selectionData && (
+        <SelectionToolbar
+          selection={selectionData}
+          onSelect={handleCreateMarker}
+          onClose={() => setSelectionData(null)}
+          saving={savingMarker}
+        />
+      )}
     </div>
   )
 }

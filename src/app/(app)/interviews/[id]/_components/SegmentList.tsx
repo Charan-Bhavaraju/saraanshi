@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { TranscriptSegment } from '@/types/database'
+import type { TranscriptSegment, TranslationSegment, Marker, MarkerType } from '@/types/database'
+import type { SelectionData } from './SelectionToolbar'
 
 type Props = {
   segments: TranscriptSegment[]
@@ -9,10 +10,21 @@ type Props = {
   onSeek: (seconds: number) => void
   speakerMap: Record<string, string>
   onUpdateSpeaker?: (speakerId: string, label: string) => void
+  onTextSelect?: (data: SelectionData) => void
+  onEditSave?: (segmentIdx: number, text: string) => void
+  markers?: Marker[]
+  translationSegments?: TranslationSegment[]
+  showTranslation?: boolean
 }
 
-// Deterministic color palette — assigned by speaker appearance order in the transcript
 const SPEAKER_COLORS = ['#0E5C5C', '#B8456D', '#6B4FA0', '#B8842A']
+
+const MARKER_TYPE_COLORS: Record<MarkerType, string> = {
+  quote: '#B8456D',
+  key_moment: '#B8842A',
+  theme: '#0E5C5C',
+  memo: '#4A5263',
+}
 
 function buildSpeakerIndex(segments: TranscriptSegment[]): string[] {
   const seen: string[] = []
@@ -39,7 +51,6 @@ function formatTimestamp(s: number) {
   return `${m}:${String(sec).padStart(2, '0')}`
 }
 
-// Inline-editable speaker chip shown in the toolbar
 function SpeakerChip({
   speakerId,
   label,
@@ -55,7 +66,6 @@ function SpeakerChip({
   const [value, setValue] = useState(label)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Sync label prop changes (e.g. after optimistic update settles)
   useEffect(() => { if (!editing) setValue(label) }, [label, editing])
 
   function commit() {
@@ -112,17 +122,9 @@ function SpeakerChip({
       }}
     >
       <span
-        style={{
-          display: 'inline-block',
-          width: 6,
-          height: 6,
-          borderRadius: '50%',
-          background: color,
-          flexShrink: 0,
-        }}
+        style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }}
       />
       {label}
-      {/* pencil icon */}
       <svg width="8" height="8" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.6, flexShrink: 0 }}>
         <path d="M8.5 1.5l2 2-7 7H1.5v-2l7-7z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -130,10 +132,204 @@ function SpeakerChip({
   )
 }
 
-export default function SegmentList({ segments, currentTime, onSeek, speakerMap, onUpdateSpeaker }: Props) {
+function SegmentRow({
+  seg,
+  idx,
+  isActive,
+  color,
+  label,
+  translation,
+  showTranslation,
+  segmentMarkers,
+  onSeek,
+  onTextSelect,
+  onEditSave,
+  activeRef,
+}: {
+  seg: TranscriptSegment
+  idx: number
+  isActive: boolean
+  color: string
+  label: string
+  translation?: TranslationSegment
+  showTranslation?: boolean
+  segmentMarkers: Marker[]
+  onSeek: (s: number) => void
+  onTextSelect?: (data: SelectionData) => void
+  onEditSave?: (idx: number, text: string) => void
+  activeRef: React.RefCallback<HTMLDivElement>
+}) {
+  const [hovering, setHovering] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editValue, setEditValue] = useState(seg.text)
+  const textRef = useRef<HTMLParagraphElement>(null)
+
+  // Keep editValue in sync when not editing
+  useEffect(() => {
+    if (!editing) setEditValue(seg.text)
+  }, [seg.text, editing])
+
+  function handleMouseUp(e: React.MouseEvent) {
+    if (editing || !onTextSelect) return
+    const sel = window.getSelection()
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) return
+    if (!textRef.current?.contains(sel.anchorNode)) return
+    const range = sel.getRangeAt(0)
+    const rect = range.getBoundingClientRect()
+    onTextSelect({ segmentIdx: idx, text: sel.toString().trim(), rect })
+  }
+
+  function commitEdit() {
+    setEditing(false)
+    const trimmed = editValue.trim()
+    if (trimmed && trimmed !== seg.text) {
+      onEditSave?.(idx, trimmed)
+    } else {
+      setEditValue(seg.text)
+    }
+  }
+
+  // Colored marker dots for types present on this segment
+  const markerTypes = [...new Set(segmentMarkers.map(m => m.type as MarkerType))]
+
+  return (
+    <div
+      ref={activeRef}
+      className="relative px-3 py-2.5 rounded-lg mb-1 transition-all"
+      style={{
+        background: isActive ? '#FFF8E8' : 'transparent',
+        boxShadow: isActive ? 'inset 3px 0 0 #B8842A' : 'none',
+      }}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <button
+          onClick={() => onSeek(seg.start)}
+          title="Seek to segment"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              color: isActive ? '#B8842A' : '#B5BBC4',
+              fontWeight: isActive ? 500 : 400,
+            }}
+          >
+            [{formatTimestamp(seg.start)}]
+          </span>
+        </button>
+        <span
+          className="text-xs font-semibold uppercase shrink-0"
+          style={{ letterSpacing: '0.06em', color, fontSize: 10 }}
+        >
+          {label}
+        </span>
+        {seg.editedByHuman && (
+          <span
+            className="text-xs px-1 rounded"
+            style={{ background: '#F5EBD3', color: '#B8842A', fontSize: 9 }}
+          >
+            edited
+          </span>
+        )}
+        {/* Marker type dots */}
+        {markerTypes.length > 0 && (
+          <div className="flex items-center gap-0.5 ml-1">
+            {markerTypes.map(t => (
+              <span
+                key={t}
+                title={t.replace('_', ' ')}
+                style={{ width: 6, height: 6, borderRadius: '50%', background: MARKER_TYPE_COLORS[t], display: 'inline-block' }}
+              />
+            ))}
+          </div>
+        )}
+        {/* Edit pencil */}
+        {onEditSave && hovering && !editing && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setEditing(true) }}
+            className="ml-auto p-0.5 rounded transition-all"
+            style={{ color: '#B5BBC4', flexShrink: 0 }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#4A5263')}
+            onMouseLeave={e => (e.currentTarget.style.color = '#B5BBC4')}
+            title="Edit segment text"
+          >
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+              <path d="M8.5 1.5l2 2-7 7H1.5v-2l7-7z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <textarea
+          value={editValue}
+          onChange={e => setEditValue(e.target.value)}
+          onBlur={commitEdit}
+          onKeyDown={e => {
+            if (e.key === 'Escape') { setEditing(false); setEditValue(seg.text) }
+          }}
+          autoFocus
+          rows={Math.max(2, editValue.split('\n').length)}
+          className="w-full rounded-lg px-2 py-1.5 resize-none"
+          style={{
+            fontFamily: "'Noto Sans Telugu', 'Noto Sans', var(--font-sans), sans-serif",
+            fontSize: 14,
+            lineHeight: 1.65,
+            color: '#1A1F2C',
+            background: '#FFF8E8',
+            border: '1px solid #B8842A',
+            outline: 'none',
+          }}
+        />
+      ) : (
+        <p
+          ref={textRef}
+          onMouseUp={handleMouseUp}
+          style={{
+            fontFamily: "'Noto Sans Telugu', 'Noto Sans', var(--font-sans), sans-serif",
+            fontSize: 14,
+            lineHeight: 1.65,
+            color: isActive ? '#1A1F2C' : '#4A5263',
+            userSelect: onTextSelect ? 'text' : undefined,
+          }}
+        >
+          {seg.text}
+        </p>
+      )}
+
+      {/* Inline translation */}
+      {showTranslation && translation && !editing && (
+        <p
+          className="mt-1 text-xs leading-relaxed"
+          style={{ color: '#8A929C', fontStyle: 'italic', lineHeight: 1.6 }}
+        >
+          {translation.enText}
+          {translation.confidence === 'low' && (
+            <span title="Low confidence translation" style={{ marginLeft: 4, opacity: 0.6 }}>~</span>
+          )}
+        </p>
+      )}
+    </div>
+  )
+}
+
+export default function SegmentList({
+  segments,
+  currentTime,
+  onSeek,
+  speakerMap,
+  onUpdateSpeaker,
+  onTextSelect,
+  onEditSave,
+  markers = [],
+  translationSegments,
+  showTranslation,
+}: Props) {
   const [autoScroll, setAutoScroll] = useState(true)
   const activeRef = useRef<HTMLDivElement | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
 
   const speakerOrder = buildSpeakerIndex(segments)
   const activeIdx = segments.findLastIndex(s => currentTime >= s.start)
@@ -142,6 +338,10 @@ export default function SegmentList({ segments, currentTime, onSeek, speakerMap,
     if (!autoScroll || !activeRef.current) return
     activeRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }, [activeIdx, autoScroll])
+
+  const translationMap = Object.fromEntries(
+    (translationSegments ?? []).map(t => [t.segmentIdx, t])
+  )
 
   const wordCount = segments.reduce((acc, s) => acc + s.text.split(/\s+/).filter(Boolean).length, 0)
 
@@ -165,7 +365,6 @@ export default function SegmentList({ segments, currentTime, onSeek, speakerMap,
           <strong style={{ color: '#1A1F2C' }}>{wordCount.toLocaleString()}</strong> words
         </span>
 
-        {/* Editable speaker chips */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {speakerOrder.map(spkId => (
             <SpeakerChip
@@ -195,68 +394,31 @@ export default function SegmentList({ segments, currentTime, onSeek, speakerMap,
       </div>
 
       {/* Segments */}
-      <div ref={containerRef} className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto">
         {segments.map((seg, idx) => {
           const isActive = idx === activeIdx
           const color = speakerColor(seg.speaker, speakerOrder)
           const label = speakerLabel(seg.speaker, speakerMap)
+          const segmentMarkers = markers.filter(m => m.segmentIdx === idx)
 
           return (
-            <div
+            <SegmentRow
               key={idx}
-              ref={isActive ? activeRef : null}
-              onClick={() => onSeek(seg.start)}
-              className="px-3 py-2.5 rounded-lg mb-1 cursor-pointer transition-all"
-              style={{
-                background: isActive ? '#FFF8E8' : 'transparent',
-                boxShadow: isActive ? 'inset 3px 0 0 #B8842A' : 'none',
+              seg={seg}
+              idx={idx}
+              isActive={isActive}
+              color={color}
+              label={label}
+              translation={translationMap[idx]}
+              showTranslation={showTranslation}
+              segmentMarkers={segmentMarkers}
+              onSeek={onSeek}
+              onTextSelect={onTextSelect}
+              onEditSave={onEditSave}
+              activeRef={(el) => {
+                if (isActive) activeRef.current = el
               }}
-              onMouseEnter={e => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = '#F5F1E9'
-              }}
-              onMouseLeave={e => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
-              }}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <span
-                  className="shrink-0"
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    color: isActive ? '#B8842A' : '#B5BBC4',
-                    fontWeight: isActive ? 500 : 400,
-                  }}
-                >
-                  [{formatTimestamp(seg.start)}]
-                </span>
-                <span
-                  className="text-xs font-semibold uppercase shrink-0"
-                  style={{ letterSpacing: '0.06em', color, fontSize: 10 }}
-                >
-                  {label}
-                </span>
-                {seg.editedByHuman && (
-                  <span
-                    className="text-xs px-1 rounded"
-                    style={{ background: '#F5EBD3', color: '#B8842A', fontSize: 9 }}
-                  >
-                    edited
-                  </span>
-                )}
-              </div>
-
-              <p
-                className="text-sm leading-relaxed"
-                style={{
-                  color: isActive ? '#1A1F2C' : '#4A5263',
-                  fontFamily: "'Noto Sans Telugu', 'Noto Sans', var(--font-sans), sans-serif",
-                  lineHeight: 1.65,
-                }}
-              >
-                {seg.text}
-              </p>
-            </div>
+            />
           )
         })}
       </div>

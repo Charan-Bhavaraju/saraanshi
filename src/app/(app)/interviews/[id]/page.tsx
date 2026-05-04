@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { interviews, contacts, transcripts } from '@/db/schema'
+import { interviews, contacts, transcripts, markers } from '@/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
@@ -13,7 +13,7 @@ import RealtimeStatusWatcher from './_components/RealtimeStatusWatcher'
 import TranscribingPoller from './_components/TranscribingPoller'
 import EditInterviewPanel from './_components/EditInterviewPanel'
 import ReplaceAudioPanel from './_components/ReplaceAudioPanel'
-import type { TranscriptSegment } from '@/types/database'
+import type { TranscriptSegment, TranslationSegment, Marker } from '@/types/database'
 
 const LANG_LABELS: Record<string, string> = { en: 'English', te: 'Telugu', mixed: 'Mixed' }
 
@@ -51,6 +51,14 @@ async function getCurrentTranscript(interviewId: string) {
     .where(and(eq(transcripts.interviewId, interviewId), eq(transcripts.isCurrent, true)))
     .limit(1)
   return t ?? null
+}
+
+async function getMarkers(interviewId: string): Promise<Marker[]> {
+  return db
+    .select()
+    .from(markers)
+    .where(and(eq(markers.interviewId, interviewId), isNull(markers.deletedAt)))
+    .orderBy(markers.segmentIdx)
 }
 
 async function getAudioUrl(interviewId: string): Promise<string | null> {
@@ -92,10 +100,11 @@ export default async function InterviewDetailPage({
   const interview = await getInterview(id)
   if (!interview) notFound()
 
-  const [contact, transcript, allContacts] = await Promise.all([
+  const [contact, transcript, allContacts, interviewMarkers] = await Promise.all([
     interview.contactId ? getContact(interview.contactId) : null,
     getCurrentTranscript(id),
     getAllContacts(),
+    getMarkers(id),
   ])
 
   // Only fetch audio URL if we have audio and will show the viewer
@@ -104,6 +113,7 @@ export default async function InterviewDetailPage({
     : null
 
   const segments = (transcript?.segments as TranscriptSegment[] | null) ?? []
+  const translationSegments = (transcript?.translationSegments as TranslationSegment[] | null) ?? []
   const meta = interview.metadata as { sarvamJobId?: string; speakerMap?: Record<string, string> } | null
   const speakerMap = meta?.speakerMap ?? {}
   const showUploadZone = ['draft', 'created', 'uploading', 'uploaded'].includes(interview.status)
@@ -279,6 +289,10 @@ export default async function InterviewDetailPage({
           audioUrl={audioUrl}
           segments={segments}
           initialSpeakerMap={speakerMap}
+          transcriptId={transcript?.id}
+          initialMarkers={interviewMarkers}
+          initialTranslationSegments={translationSegments}
+          interviewStatus={interview.status}
         />
       )}
 

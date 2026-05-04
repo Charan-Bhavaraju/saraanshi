@@ -3,22 +3,10 @@ import { interviews, contacts } from '@/db/schema'
 import { isNull, desc, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import type { InterviewWithContact } from '@/types/database'
+import InterviewListClient from './_components/InterviewListClient'
 
 // Bust immediately via revalidatePath('/interviews') in server actions; 30s TTL as safety-net
 export const revalidate = 30
-
-const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  draft:        { label: 'Draft',        bg: '#F5F1E9', color: '#8A929C' },
-  created:      { label: 'No audio',     bg: '#F5F1E9', color: '#8A929C' },
-  uploading:    { label: 'Uploading',    bg: '#F5EBD3', color: '#B8842A' },
-  uploaded:     { label: 'Uploaded',     bg: '#F5EBD3', color: '#B8842A' },
-  transcribing: { label: 'Transcribing', bg: '#F5EBD3', color: '#B8842A' },
-  transcribed:  { label: 'Transcribed',  bg: '#E2EEEC', color: '#0E5C5C' },
-  reviewed:     { label: 'Reviewed',     bg: '#E0E5DA', color: '#4A5C3A' },
-  analyzed:     { label: 'Analyzed',     bg: '#EFEAF8', color: '#5A3F8F' },
-}
-
-const LANG_LABELS: Record<string, string> = { en: 'English', te: 'Telugu', mixed: 'Mixed' }
 
 async function getInterviews(): Promise<InterviewWithContact[]> {
   const rows = await db
@@ -45,18 +33,6 @@ async function getInterviews(): Promise<InterviewWithContact[]> {
     ...r,
     contact: r.contactId ? contactMap[r.contactId] ?? null : null,
   }))
-}
-
-function formatDuration(seconds: number | null | undefined): string {
-  if (!seconds) return ''
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}:${String(s).padStart(2, '0')}`
-}
-
-function formatDate(d: Date | string | null | undefined): string {
-  if (!d) return ''
-  return new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export default async function InterviewsPage() {
@@ -100,88 +76,12 @@ export default async function InterviewsPage() {
       {allInterviews.length === 0 ? (
         <EmptyState />
       ) : (
-        <div className="flex flex-col gap-2">
-          {allInterviews.map(interview => (
-            <InterviewRow key={interview.id} interview={interview} />
-          ))}
-        </div>
+        <InterviewListClient interviews={allInterviews} />
       )}
     </div>
   )
 }
 
-function InterviewRow({ interview }: { interview: InterviewWithContact }) {
-  const cfg = STATUS_CONFIG[interview.status] ?? STATUS_CONFIG.draft
-
-  return (
-    <Link
-      href={`/interviews/${interview.id}`}
-      className="flex items-center gap-4 px-5 py-4 rounded-[14px] transition-all group hover:bg-[#FAFAF8]"
-      style={{ border: '1px solid #ECE6D9' }}
-    >
-      {/* Participant code */}
-      <div
-        className="shrink-0 rounded-lg flex items-center justify-center"
-        style={{
-          background: '#E2EEEC',
-          minWidth: 56,
-          height: 40,
-          fontFamily: 'var(--font-mono)',
-          fontSize: 12,
-          fontWeight: 500,
-          color: '#0E5C5C',
-          padding: '0 8px',
-        }}
-      >
-        {interview.participantCode ?? '—'}
-      </div>
-
-      {/* Main info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-          <p className="text-sm font-medium" style={{ color: '#1A1F2C' }}>
-            {interview.contact?.displayName ?? 'Unknown participant'}
-          </p>
-          {interview.contact?.organization && (
-            <span className="text-xs" style={{ color: '#8A929C' }}>· {interview.contact.organization}</span>
-          )}
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          {interview.conductedAt && (
-            <span className="text-xs" style={{ color: '#8A929C' }}>{formatDate(interview.conductedAt)}</span>
-          )}
-          <span
-            className="text-xs px-1.5 py-0.5 rounded"
-            style={{ background: '#F5F1E9', color: '#4A5263', fontFamily: 'var(--font-mono)', fontSize: 10 }}
-          >
-            {LANG_LABELS[interview.language]}
-          </span>
-          {interview.durationSeconds && (
-            <span className="text-xs" style={{ color: '#8A929C' }}>{formatDuration(interview.durationSeconds)}</span>
-          )}
-          {interview.location && (
-            <span className="text-xs truncate max-w-[200px]" style={{ color: '#8A929C' }}>
-              {interview.location}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Status badge */}
-      <span
-        className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full uppercase"
-        style={{ background: cfg.bg, color: cfg.color, letterSpacing: '0.04em', fontSize: 10 }}
-      >
-        {cfg.label}
-      </span>
-
-      {/* Arrow */}
-      <svg className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <path d="M5 2l5 5-5 5" stroke="#8A929C" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </Link>
-  )
-}
 
 function EmptyState() {
   return (

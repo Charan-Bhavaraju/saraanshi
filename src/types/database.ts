@@ -22,7 +22,14 @@ export type {
   TranscriptInsert,
   UsageLog,
   TranscriptSegment,
+  TranslationSegment,
 } from '@/db/schema/interviews'
+
+export type {
+  Marker,
+  MarkerInsert,
+  MarkerType,
+} from '@/db/schema/markers'
 
 // Task with its linked contact populated (for display)
 export type TaskWithContact = import('@/db/schema/tasks').Task & {

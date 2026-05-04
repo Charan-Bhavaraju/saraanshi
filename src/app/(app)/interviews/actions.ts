@@ -1,11 +1,12 @@
 'use server'
 
 import { db } from '@/db'
-import { interviews, transcripts } from '@/db/schema'
+import { interviews, transcripts, markers } from '@/db/schema'
 import { InterviewCreateSchema, InterviewUpdateSchema, InterviewAudioSchema } from '@/lib/validations/interview'
 import { eq, isNull, and } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
+import type { TranscriptSegment, TranslationSegment, MarkerInsert } from '@/types/database'
 
 export async function createInterview(input: z.infer<typeof InterviewCreateSchema>) {
   const parsed = InterviewCreateSchema.parse(input)
@@ -129,6 +130,103 @@ export async function updateSpeakerMap(
     .set({ metadata: { ...existing, speakerMap } })
     .where(and(eq(interviews.id, interviewId), isNull(interviews.deletedAt)))
 }
+
+// --- Phase 3: Marker actions ---
+
+export async function createMarker(input: Omit<MarkerInsert, 'id' | 'createdAt' | 'deletedAt'>) {
+  const [marker] = await db
+    .insert(markers)
+    .values(input)
+    .returning()
+
+  revalidatePath(`/interviews/${input.interviewId}`)
+  return marker
+}
+
+export async function deleteMarker(markerId: string, interviewId: string) {
+  await db
+    .update(markers)
+    .set({ deletedAt: new Date() })
+    .where(eq(markers.id, markerId))
+
+  revalidatePath(`/interviews/${interviewId}`)
+}
+
+export async function updateMarkerNote(
+  markerId: string,
+  interviewId: string,
+  note: string,
+  tags: string[],
+) {
+  const [marker] = await db
+    .update(markers)
+    .set({ note, tags })
+    .where(and(eq(markers.id, markerId), isNull(markers.deletedAt)))
+    .returning()
+
+  revalidatePath(`/interviews/${interviewId}`)
+  return marker
+}
+
+export async function saveSegmentEdit(
+  interviewId: string,
+  transcriptId: string,
+  segmentIdx: number,
+  text: string,
+) {
+  const [row] = await db
+    .select({ segments: transcripts.segments })
+    .from(transcripts)
+    .where(eq(transcripts.id, transcriptId))
+    .limit(1)
+
+  if (!row) return
+
+  const segs = (row.segments ?? []) as TranscriptSegment[]
+  const seg = segs[segmentIdx]
+  if (!seg) return
+
+  segs[segmentIdx] = {
+    ...seg,
+    text,
+    edited: true,
+    editedByHuman: true,
+    // Preserve original text only on the first human edit
+    originalText: seg.editedByHuman ? seg.originalText : seg.text,
+  }
+
+  await db
+    .update(transcripts)
+    .set({ segments: segs })
+    .where(eq(transcripts.id, transcriptId))
+
+  revalidatePath(`/interviews/${interviewId}`)
+}
+
+export async function markReviewed(interviewId: string) {
+  await db
+    .update(interviews)
+    .set({ status: 'reviewed' })
+    .where(and(eq(interviews.id, interviewId), isNull(interviews.deletedAt)))
+
+  revalidatePath(`/interviews/${interviewId}`)
+  revalidatePath('/interviews')
+}
+
+export async function saveTranslation(
+  transcriptId: string,
+  interviewId: string,
+  segments: TranslationSegment[],
+) {
+  await db
+    .update(transcripts)
+    .set({ translationSegments: segments })
+    .where(eq(transcripts.id, transcriptId))
+
+  revalidatePath(`/interviews/${interviewId}`)
+}
+
+// --- Transcript fetch ---
 
 // Fetch transcript for an interview (most recent current version)
 export async function getTranscript(interviewId: string) {

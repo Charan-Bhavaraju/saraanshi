@@ -60,13 +60,15 @@ export const transcripts = pgTable('transcripts', {
   version: integer('version').notNull().default(1),
   isCurrent: boolean('is_current').notNull().default(true),
   language: interviewLanguageEnum('language').notNull().default('mixed'),
-  // [{start, end, speaker, text, edited, edited_by_human}]
+  // [{start, end, speaker, text, edited, editedByHuman, originalText?}]
   segments: jsonb('segments'),
   fullText: text('full_text'),
   wordCount: integer('word_count'),
   // Raw Sarvam response kept for reprocessing or provider swap
   rawProviderResponse: jsonb('raw_provider_response'),
   englishTranslation: text('english_translation'),
+  // Segment-level translation: [{segmentIdx, enText, confidence}]
+  translationSegments: jsonb('translation_segments'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
@@ -127,4 +129,11 @@ export type TranscriptSegment = {
   text: string
   edited: boolean
   editedByHuman: boolean
+  originalText?: string  // preserved on first human edit
+}
+
+export type TranslationSegment = {
+  segmentIdx: number
+  enText: string
+  confidence: 'high' | 'medium' | 'low'
 }
