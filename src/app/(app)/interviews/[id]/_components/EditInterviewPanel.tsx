@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { updateInterview } from '@/app/(app)/interviews/actions'
+import ErrorBanner from '@/components/ErrorBanner'
 import type { Interview, InterviewType } from '@/types/database'
 
 type ContactOption = { id: string; displayName: string; organization: string | null }
@@ -233,9 +234,7 @@ export default function EditInterviewPanel({ interview, contacts }: Props) {
             </label>
 
             {error && (
-              <p className="text-sm px-3 py-2 rounded-lg" style={{ background: '#FDF0F4', color: '#B8456D', border: '1px solid #F0C8D4' }}>
-                {error}
-              </p>
+              <ErrorBanner message={error} onDismiss={() => setError(null)} />
             )}
 
             <div className="flex gap-2 pt-1">

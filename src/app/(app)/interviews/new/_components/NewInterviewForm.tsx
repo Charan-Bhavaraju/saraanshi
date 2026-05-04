@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createInterview, suggestParticipantCode } from '../../actions'
+import ErrorBanner from '@/components/ErrorBanner'
 import type { InterviewType } from '@/types/database'
 
 type ContactOption = {
@@ -205,9 +206,7 @@ export default function NewInterviewForm({ contacts }: { contacts: ContactOption
       </label>
 
       {error && (
-        <p className="text-sm px-3 py-2 rounded-lg" style={{ background: '#FDF0F4', color: '#B8456D', border: '1px solid #F0C8D4' }}>
-          {error}
-        </p>
+        <ErrorBanner message={error} onDismiss={() => setError(null)} />
       )}
 
       <div className="flex gap-2 pt-2">
