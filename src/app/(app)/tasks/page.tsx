@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { db } from '@/db'
 import { tasks, contacts } from '@/db/schema'
 import { isNull, eq, asc } from 'drizzle-orm'
