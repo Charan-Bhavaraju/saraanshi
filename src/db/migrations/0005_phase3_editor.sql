@@ -21,6 +21,15 @@ CREATE TABLE IF NOT EXISTS markers (
 
 CREATE INDEX IF NOT EXISTS markers_interview_idx ON markers(interview_id) WHERE deleted_at IS NULL;
 
+-- RLS: enable and allow authenticated users (single-user app)
+ALTER TABLE markers ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can manage markers"
+  ON markers FOR ALL
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
 -- 2. Segment-level translation column on transcripts
 -- Stores [{segmentIdx, enText, confidence}]
 ALTER TABLE transcripts ADD COLUMN IF NOT EXISTS translation_segments jsonb;
