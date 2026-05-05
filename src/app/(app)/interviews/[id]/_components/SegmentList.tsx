@@ -179,6 +179,16 @@ function SegmentRow({
     onTextSelect({ segmentIdx: idx, text: sel.toString().trim(), rect })
   }
 
+  function handleRowClick(e: React.MouseEvent) {
+    // Don't seek if clicking on interactive elements (buttons, inputs, speaker chip area)
+    const target = e.target as HTMLElement
+    if (target.closest('button') || target.closest('input') || target.closest('textarea')) return
+    // Don't seek if the user just finished selecting text
+    const sel = window.getSelection()
+    if (sel && !sel.isCollapsed) return
+    onSeek(seg.start)
+  }
+
   function commitEdit() {
     setEditing(false)
     const trimmed = editValue.trim()
@@ -199,7 +209,9 @@ function SegmentRow({
       style={{
         background: isActive ? '#FFF8E8' : 'transparent',
         boxShadow: isActive ? 'inset 3px 0 0 #B8842A' : 'none',
+        cursor: editing ? 'default' : 'pointer',
       }}
+      onClick={handleRowClick}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >

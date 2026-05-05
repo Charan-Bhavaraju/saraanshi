@@ -6,7 +6,8 @@ import WaveSurfer from 'wavesurfer.js'
 type Props = {
   audioUrl: string
   onTimeUpdate?: (currentTime: number) => void
-  seekTo?: number // signal from parent: seek to this time (in seconds)
+  seekTo?: number   // time in seconds to seek to
+  seekCounter?: number // increment to re-seek even if seekTo value is the same
 }
 
 const SPEEDS = [1, 1.25, 1.5, 2] as const
@@ -17,7 +18,7 @@ function formatTime(s: number) {
   return `${m}:${String(sec).padStart(2, '0')}`
 }
 
-export default function AudioPlayer({ audioUrl, onTimeUpdate, seekTo }: Props) {
+export default function AudioPlayer({ audioUrl, onTimeUpdate, seekTo, seekCounter }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WaveSurfer | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -70,11 +71,13 @@ export default function AudioPlayer({ audioUrl, onTimeUpdate, seekTo }: Props) {
     return () => { ws.destroy(); wsRef.current = null }
   }, [audioUrl]) // re-init if URL changes (presign refresh)
 
-  // Seek from external (segment click)
+  // Seek from external (segment click). seekCounter as dep so clicking
+  // the same segment twice still fires.
   useEffect(() => {
     if (seekTo === undefined || !wsRef.current || !isReady) return
     wsRef.current.seekTo(seekTo / wsRef.current.getDuration())
-  }, [seekTo, isReady])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seekTo, seekCounter, isReady])
 
   function togglePlay() {
     wsRef.current?.playPause()

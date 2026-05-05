@@ -149,7 +149,8 @@ export default function TranscriptViewer({
         <AudioPlayer
           audioUrl={audioUrl}
           onTimeUpdate={setCurrentTime}
-          seekTo={seekCounter > 0 ? seekTo : undefined}
+          seekTo={seekTo}
+          seekCounter={seekCounter}
         />
       </div>
 
