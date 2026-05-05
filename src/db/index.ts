@@ -10,9 +10,9 @@ const isDev = process.env.NODE_ENV !== 'production'
 
 const client = globalForDb._pgClient ?? postgres(process.env.DATABASE_URL!, {
   prepare: false,
-  // Transaction-mode pgbouncer (port 6543) requires max:1.
-  // Direct connection (port 5432) can safely use a small pool in dev.
-  max: isDev ? 5 : 1,
+  // pgbouncer transaction mode works fine with a small pool; max:1 serializes
+  // parallel Promise.all queries and causes stalls under any real load.
+  max: isDev ? 5 : 3,
   idle_timeout: 30,
   connect_timeout: 15,
   // Override Supabase's aggressive statement_timeout (default is often 3-8s on free tier)

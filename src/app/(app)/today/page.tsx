@@ -8,10 +8,6 @@ import Link from 'next/link'
 import TodayTaskList from './_components/TodayTaskList'
 import StatusBadge from '../interviews/[id]/_components/StatusBadge'
 
-// Page-level ISR: serve from Vercel edge cache, bust immediately via revalidatePath('/today')
-// called from task/interview server actions. 60s TTL is a safety-net for anything missed.
-export const revalidate = 60
-
 async function getStats() {
   const now = new Date()
   const todayStart = startOfDay(now)
