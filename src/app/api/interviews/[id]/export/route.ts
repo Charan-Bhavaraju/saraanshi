@@ -128,7 +128,7 @@ export async function GET(
   const includeHidden = req.nextUrl.searchParams.get('includeHidden') === 'true'
 
   const [interview] = await db
-    .select({ participantCode: interviews.participantCode })
+    .select({ participantCode: interviews.participantCode, metadata: interviews.metadata })
     .from(interviews)
     .where(and(eq(interviews.id, id), isNull(interviews.deletedAt)))
     .limit(1)
@@ -137,6 +137,8 @@ export async function GET(
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  const speakerMap = (interview.metadata as { speakerMap?: Record<string, string> } | null)?.speakerMap ?? {}
+
   const [transcript] = await db
     .select({ segments: transcripts.segments })
     .from(transcripts)
@@ -144,7 +146,12 @@ export async function GET(
     .limit(1)
 
   const allSegments = (transcript?.segments as TranscriptSegment[] | null) ?? []
-  const segments = includeHidden ? allSegments : allSegments.filter(s => !s.hidden)
+  const filtered = includeHidden ? allSegments : allSegments.filter(s => !s.hidden)
+  // Apply speaker labels before passing to formatters
+  const segments = filtered.map(s => ({
+    ...s,
+    speaker: speakerMap[s.speaker] ?? s.speaker,
+  }))
   const slug = interview.participantCode ?? id.slice(0, 8)
 
   if (format === 'quotes') {
