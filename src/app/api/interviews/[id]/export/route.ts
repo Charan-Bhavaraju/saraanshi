@@ -125,6 +125,7 @@ export async function GET(
 ) {
   const { id } = await params
   const format = (req.nextUrl.searchParams.get('format') ?? 'txt') as Format
+  const includeHidden = req.nextUrl.searchParams.get('includeHidden') === 'true'
 
   const [interview] = await db
     .select({ participantCode: interviews.participantCode })
@@ -142,7 +143,8 @@ export async function GET(
     .where(and(eq(transcripts.interviewId, id), eq(transcripts.isCurrent, true)))
     .limit(1)
 
-  const segments = (transcript?.segments as TranscriptSegment[] | null) ?? []
+  const allSegments = (transcript?.segments as TranscriptSegment[] | null) ?? []
+  const segments = includeHidden ? allSegments : allSegments.filter(s => !s.hidden)
   const slug = interview.participantCode ?? id.slice(0, 8)
 
   if (format === 'quotes') {
