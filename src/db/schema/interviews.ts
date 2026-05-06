@@ -130,6 +130,7 @@ export type TranscriptSegment = {
   edited: boolean
   editedByHuman: boolean
   originalText?: string  // preserved on first human edit
+  hidden?: boolean       // user-dismissed filler segment
 }
 
 export type TranslationSegment = {

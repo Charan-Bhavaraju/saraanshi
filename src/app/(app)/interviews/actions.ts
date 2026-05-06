@@ -203,6 +203,33 @@ export async function saveSegmentEdit(
   revalidatePath(`/interviews/${interviewId}`)
 }
 
+export async function hideSegment(
+  interviewId: string,
+  transcriptId: string,
+  segmentIdx: number,
+  hidden: boolean,
+) {
+  const [row] = await db
+    .select({ segments: transcripts.segments })
+    .from(transcripts)
+    .where(eq(transcripts.id, transcriptId))
+    .limit(1)
+
+  if (!row) return
+
+  const segs = (row.segments ?? []) as TranscriptSegment[]
+  if (!segs[segmentIdx]) return
+
+  segs[segmentIdx] = { ...segs[segmentIdx], hidden }
+
+  await db
+    .update(transcripts)
+    .set({ segments: segs })
+    .where(eq(transcripts.id, transcriptId))
+
+  revalidatePath(`/interviews/${interviewId}`)
+}
+
 export async function markReviewed(interviewId: string) {
   await db
     .update(interviews)

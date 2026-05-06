@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import SegmentList from './SegmentList'
 import MarkersList from './MarkersList'
@@ -12,6 +12,7 @@ import {
   deleteMarker,
   updateMarkerNote,
   saveSegmentEdit,
+  hideSegment,
   saveTranslation,
 } from '@/app/(app)/interviews/actions'
 import type {
@@ -59,6 +60,9 @@ export default function TranscriptViewer({
   const [selectionData, setSelectionData] = useState<SelectionData | null>(null)
   const [savingMarker, setSavingMarker] = useState(false)
 
+  const [undoSegment, setUndoSegment] = useState<{ idx: number; text: string } | null>(null)
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const handleSeek = useCallback((seconds: number) => {
     setSeekTo(seconds)
     setSeekCounter(c => c + 1)
@@ -79,6 +83,25 @@ export default function TranscriptViewer({
         : s
     ))
     await saveSegmentEdit(interviewId, transcriptId, segmentIdx, text)
+  }, [interviewId, transcriptId])
+
+  const handleHideSegment = useCallback(async (segmentIdx: number) => {
+    if (!transcriptId) return
+    const seg = localSegments[segmentIdx]
+    if (!seg) return
+    setLocalSegments(prev => prev.map((s, i) => i === segmentIdx ? { ...s, hidden: true } : s))
+    setUndoSegment({ idx: segmentIdx, text: seg.text })
+    if (undoTimer.current) clearTimeout(undoTimer.current)
+    undoTimer.current = setTimeout(() => setUndoSegment(null), 5000)
+    await hideSegment(interviewId, transcriptId, segmentIdx, true)
+  }, [interviewId, transcriptId, localSegments])
+
+  const handleUnhideSegment = useCallback(async (segmentIdx: number) => {
+    if (!transcriptId) return
+    setLocalSegments(prev => prev.map((s, i) => i === segmentIdx ? { ...s, hidden: false } : s))
+    if (undoTimer.current) clearTimeout(undoTimer.current)
+    setUndoSegment(null)
+    await hideSegment(interviewId, transcriptId, segmentIdx, false)
   }, [interviewId, transcriptId])
 
   const handleCreateMarker = useCallback(async (type: MarkerType) => {
@@ -180,7 +203,7 @@ export default function TranscriptViewer({
             Transcript
           </h3>
         </div>
-        <div className="flex-1 overflow-hidden px-5 pb-5">
+        <div className="flex-1 overflow-hidden px-5 pb-5 relative">
           <SegmentList
             segments={localSegments}
             currentTime={currentTime}
@@ -189,10 +212,30 @@ export default function TranscriptViewer({
             onUpdateSpeaker={handleUpdateSpeaker}
             onTextSelect={transcriptId ? setSelectionData : undefined}
             onEditSave={transcriptId ? handleEditSave : undefined}
+            onHide={transcriptId ? handleHideSegment : undefined}
+            onUnhide={transcriptId ? handleUnhideSegment : undefined}
             markers={localMarkers}
             translationSegments={translationSegments}
             showTranslation={showTranslation}
           />
+          {/* Undo toast */}
+          {undoSegment && (
+            <div
+              className="absolute bottom-4 left-0 right-0 mx-3 flex items-center gap-3 px-3 py-2.5 rounded-xl shadow-lg"
+              style={{ background: '#1A1F2C', border: '1px solid #2D3545' }}
+            >
+              <p className="flex-1 text-xs truncate" style={{ color: '#B5BBC4' }}>
+                Hidden: <span style={{ color: '#FAF7F2' }}>&ldquo;{undoSegment.text}&rdquo;</span>
+              </p>
+              <button
+                onClick={() => handleUnhideSegment(undoSegment.idx)}
+                className="text-xs font-medium px-2.5 py-1 rounded-lg shrink-0"
+                style={{ background: '#E2EEEC', color: '#0E5C5C' }}
+              >
+                Undo
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
