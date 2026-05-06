@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
-import Link from 'next/link'
+import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import type { InterviewWithContact } from '@/types/database'
+import { deleteInterview } from '../actions'
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   draft:        { label: 'Draft',        bg: '#F5F1E9', color: '#8A929C' },
@@ -59,17 +60,22 @@ function formatDate(d: Date | string | null | undefined): string {
 
 export default function InterviewListClient({ interviews }: { interviews: InterviewWithContact[] }) {
   const [filter, setFilter] = useState<Filter>('all')
+  const [localInterviews, setLocalInterviews] = useState(interviews)
 
-  const counts: Record<Filter, number> = {
-    all: interviews.length,
-    patients: interviews.filter(i => i.type === 'patient').length,
-    doctors: interviews.filter(i => i.type === 'doctor').length,
-    in_progress: interviews.filter(i => ['uploading', 'uploaded', 'transcribing'].includes(i.status)).length,
-    transcribed: interviews.filter(i => i.status === 'transcribed').length,
-    reviewed: interviews.filter(i => ['reviewed', 'analyzed'].includes(i.status)).length,
+  function handleDeleted(id: string) {
+    setLocalInterviews(prev => prev.filter(i => i.id !== id))
   }
 
-  const filtered = interviews.filter(i => matchesFilter(i, filter))
+  const counts: Record<Filter, number> = {
+    all: localInterviews.length,
+    patients: localInterviews.filter(i => i.type === 'patient').length,
+    doctors: localInterviews.filter(i => i.type === 'doctor').length,
+    in_progress: localInterviews.filter(i => ['uploading', 'uploaded', 'transcribing'].includes(i.status)).length,
+    transcribed: localInterviews.filter(i => i.status === 'transcribed').length,
+    reviewed: localInterviews.filter(i => ['reviewed', 'analyzed'].includes(i.status)).length,
+  }
+
+  const filtered = localInterviews.filter(i => matchesFilter(i, filter))
 
   return (
     <div>
@@ -118,7 +124,7 @@ export default function InterviewListClient({ interviews }: { interviews: Interv
       ) : (
         <div className="flex flex-col gap-2">
           {filtered.map(interview => (
-            <InterviewRow key={interview.id} interview={interview} />
+            <InterviewRow key={interview.id} interview={interview} onDeleted={handleDeleted} />
           ))}
         </div>
       )}
@@ -126,15 +132,43 @@ export default function InterviewListClient({ interviews }: { interviews: Interv
   )
 }
 
-function InterviewRow({ interview }: { interview: InterviewWithContact }) {
+function InterviewRow({
+  interview,
+  onDeleted,
+}: {
+  interview: InterviewWithContact
+  onDeleted: (id: string) => void
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [confirming, setConfirming] = useState(false)
   const cfg = STATUS_CONFIG[interview.status] ?? STATUS_CONFIG.draft
   const typePill = TYPE_PILL[interview.type] ?? TYPE_PILL.other
 
+  function handleDelete(e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirming) { setConfirming(true); return }
+    onDeleted(interview.id)
+    startTransition(() => deleteInterview(interview.id))
+  }
+
+  function handleCancelDelete(e: React.MouseEvent) {
+    e.stopPropagation()
+    setConfirming(false)
+  }
+
   return (
-    <Link
-      href={`/interviews/${interview.id}`}
-      className="flex items-center gap-4 px-5 py-4 rounded-[14px] transition-all group hover:bg-[#FAFAF8]"
-      style={{ border: '1px solid #ECE6D9' }}
+    <div
+      onClick={() => !confirming && router.push(`/interviews/${interview.id}`)}
+      className="flex items-center gap-4 px-5 py-4 rounded-[14px] transition-all group"
+      style={{
+        border: `1px solid ${confirming ? '#F0C8D4' : '#ECE6D9'}`,
+        background: confirming ? '#FDF8F9' : undefined,
+        cursor: confirming ? 'default' : 'pointer',
+        opacity: isPending ? 0.5 : 1,
+      }}
+      onMouseEnter={e => { if (!confirming) (e.currentTarget as HTMLElement).style.background = '#FAFAF8' }}
+      onMouseLeave={e => { if (!confirming) (e.currentTarget as HTMLElement).style.background = '' }}
     >
       <div
         className="shrink-0 rounded-lg flex items-center justify-center"
@@ -197,9 +231,46 @@ function InterviewRow({ interview }: { interview: InterviewWithContact }) {
         {cfg.label}
       </span>
 
-      <svg className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <path d="M5 2l5 5-5 5" stroke="#8A929C" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </Link>
+      {/* Delete controls */}
+      {confirming ? (
+        <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+          <span className="text-xs" style={{ color: '#B8456D', fontWeight: 500 }}>Delete?</span>
+          <button
+            onClick={handleDelete}
+            disabled={isPending}
+            className="text-xs px-2.5 py-1 rounded-lg font-medium"
+            style={{ background: '#B8456D', color: '#FFFFFF' }}
+          >
+            Yes
+          </button>
+          <button
+            onClick={handleCancelDelete}
+            className="text-xs px-2.5 py-1 rounded-lg"
+            style={{ background: '#F5F1E9', color: '#4A5263' }}
+          >
+            No
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={handleDelete}
+          className="shrink-0 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+          style={{ color: '#B5BBC4' }}
+          title="Delete interview"
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLElement).style.background = '#FDF0F4'
+            ;(e.currentTarget as HTMLElement).style.color = '#B8456D'
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLElement).style.background = 'transparent'
+            ;(e.currentTarget as HTMLElement).style.color = '#B5BBC4'
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 13 13" fill="none">
+            <path d="M2 3.5h9M5 3.5V2.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 .5.5v1M10.5 3.5l-.6 7a.5.5 0 0 1-.5.5H3.6a.5.5 0 0 1-.5-.5l-.6-7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
+    </div>
   )
 }
