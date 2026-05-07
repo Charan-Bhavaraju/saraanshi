@@ -34,47 +34,73 @@ export async function POST(
 
   if (!transcript) return NextResponse.json({ error: 'No transcript' }, { status: 404 })
 
-  const segments = (transcript.segments as TranscriptSegment[] | null) ?? []
-  if (segments.length === 0) return NextResponse.json({ segments: [] })
+  const allSegments = (transcript.segments as TranscriptSegment[] | null) ?? []
+  // Only translate non-hidden segments to avoid wasting tokens
+  const segmentsToTranslate = allSegments
+    .map((s, i) => ({ idx: i, text: s.text.trim() }))
+    .filter(s => !allSegments[s.idx]?.hidden && s.text.length > 0)
+
+  if (segmentsToTranslate.length === 0) return NextResponse.json({ segments: [] })
 
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { default: Anthropic } = require('@anthropic-ai/sdk')
     const client = new Anthropic({ apiKey }) as {
       messages: {
-        create: (opts: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }> }>
+        create: (opts: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }>; stop_reason: string }>
       }
     }
 
-    // Send all segments in one call to preserve context for code-mixed speech
-    const segmentsJson = segments.map((s, i) => ({ idx: i, text: s.text }))
-    const prompt = `You are translating Telugu-English code-mixed interview segments to English for medical research.
+    const prompt = `Translate these Telugu-English interview segments to English for medical research. Return ONLY a JSON array — no markdown, no explanation.
 
-Segments to translate (JSON array):
-${JSON.stringify(segmentsJson, null, 2)}
+Input: ${JSON.stringify(segmentsToTranslate)}
 
+Output format: [{"idx":0,"enText":"...","confidence":"high|medium|low"}]
 Rules:
-- If a segment is already English, return it as-is with confidence "high"
-- Preserve clinical and medical terminology
-- Keep participant quotes as direct speech
-- Return JSON array matching: [{ "idx": number, "enText": string, "confidence": "high" | "medium" | "low" }]
-- Confidence: high = clear language, medium = partial translation needed, low = unclear/ambiguous
-- Return ONLY the JSON array, no other text`
+- Already-English segments: return as-is with confidence "high"
+- Preserve clinical/medical terms and direct speech
+- confidence: high=clear, medium=partial mix, low=unclear`
 
     const message = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 8192,
-      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 4096,
+      messages: [
+        { role: 'user', content: prompt },
+        // Prime the assistant response with "[" so it cannot emit markdown preamble
+        { role: 'assistant', content: '[' },
+      ],
     })
 
-    const raw = message.content[0]?.type === 'text' ? message.content[0].text.trim() : '[]'
-    const parsed = JSON.parse(raw) as Array<{ idx: number; enText: string; confidence: string }>
+    if (message.stop_reason === 'max_tokens') {
+      console.error('[translate] Hit max_tokens — response truncated')
+      return NextResponse.json({ error: 'Translation too long' }, { status: 500 })
+    }
 
-    const result: TranslationSegment[] = parsed.map(p => ({
-      segmentIdx: p.idx,
-      enText: p.enText,
-      confidence: (['high', 'medium', 'low'].includes(p.confidence) ? p.confidence : 'medium') as TranslationSegment['confidence'],
-    }))
+    const rawText = message.content[0]?.type === 'text' ? message.content[0].text.trim() : ''
+    // Prepend the primed "[" and strip any trailing code fence the model may add
+    const raw = ('[' + rawText).replace(/```$/, '').trim()
+
+    let parsed: Array<{ idx: unknown; enText: unknown; confidence: unknown }>
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      console.error('[translate] JSON parse failed, raw:', raw.slice(0, 200))
+      return NextResponse.json({ error: 'Translation parse error' }, { status: 500 })
+    }
+
+    if (!Array.isArray(parsed)) {
+      console.error('[translate] Response is not an array')
+      return NextResponse.json({ error: 'Translation parse error' }, { status: 500 })
+    }
+
+    const VALID_CONFIDENCE = new Set(['high', 'medium', 'low'])
+    const result: TranslationSegment[] = parsed
+      .filter(p => typeof p.idx === 'number' && typeof p.enText === 'string' && p.enText.length > 0)
+      .map(p => ({
+        segmentIdx: p.idx as number,
+        enText: (p.enText as string).trim(),
+        confidence: (VALID_CONFIDENCE.has(p.confidence as string) ? p.confidence : 'medium') as TranslationSegment['confidence'],
+      }))
 
     return NextResponse.json({ segments: result })
   } catch (err) {
