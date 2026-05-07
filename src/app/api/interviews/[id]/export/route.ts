@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { interviews, transcripts, markers } from '@/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
-import type { TranscriptSegment, Marker } from '@/types/database'
+import type { TranscriptSegment, TranslationSegment, Marker } from '@/types/database'
 
 type Format = 'txt' | 'txt-ts' | 'srt' | 'vtt' | 'docx' | 'quotes'
 
@@ -126,6 +126,7 @@ export async function GET(
   const { id } = await params
   const format = (req.nextUrl.searchParams.get('format') ?? 'txt') as Format
   const includeHidden = req.nextUrl.searchParams.get('includeHidden') === 'true'
+  const useTranslation = req.nextUrl.searchParams.get('lang') === 'en'
 
   const [interview] = await db
     .select({ participantCode: interviews.participantCode, metadata: interviews.metadata })
@@ -140,19 +141,33 @@ export async function GET(
   const speakerMap = (interview.metadata as { speakerMap?: Record<string, string> } | null)?.speakerMap ?? {}
 
   const [transcript] = await db
-    .select({ segments: transcripts.segments })
+    .select({ segments: transcripts.segments, translationSegments: transcripts.translationSegments })
     .from(transcripts)
     .where(and(eq(transcripts.interviewId, id), eq(transcripts.isCurrent, true)))
     .limit(1)
 
   const allSegments = (transcript?.segments as TranscriptSegment[] | null) ?? []
   const filtered = includeHidden ? allSegments : allSegments.filter(s => !s.hidden)
-  // Apply speaker labels before passing to formatters
-  const segments = filtered.map(s => ({
-    ...s,
-    speaker: speakerMap[s.speaker] ?? s.speaker,
-  }))
+
+  // Build translation lookup if exporting in English
+  const translationMap: Record<number, string> = {}
+  if (useTranslation) {
+    const tSegs = (transcript?.translationSegments as TranslationSegment[] | null) ?? []
+    for (const t of tSegs) translationMap[t.segmentIdx] = t.enText
+  }
+
+  // Apply speaker labels and optionally swap text with English translation
+  const segments = filtered.map((s, i) => {
+    const trueIdx = allSegments.indexOf(s)
+    return {
+      ...s,
+      speaker: speakerMap[s.speaker] ?? s.speaker,
+      text: useTranslation ? (translationMap[trueIdx] ?? s.text) : s.text,
+    }
+  })
+
   const slug = interview.participantCode ?? id.slice(0, 8)
+  const langSuffix = useTranslation ? '-en' : ''
 
   if (format === 'quotes') {
     const quoteMarkers = await db
@@ -173,7 +188,7 @@ export async function GET(
     return new Response(buf.buffer as ArrayBuffer, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename="${slug}-transcript.docx"`,
+        'Content-Disposition': `attachment; filename="${slug}-transcript${langSuffix}.docx"`,
       },
     })
   }
@@ -193,7 +208,7 @@ export async function GET(
   return new NextResponse(body, {
     headers: {
       'Content-Type': 'text/plain; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${slug}-transcript.${extMap[format]}"`,
+      'Content-Disposition': `attachment; filename="${slug}-transcript${langSuffix}.${extMap[format]}"`,
     },
   })
 }

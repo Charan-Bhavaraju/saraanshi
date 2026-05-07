@@ -12,6 +12,7 @@ type Props = {
   onUpdateSpeaker?: (speakerId: string, label: string) => void
   onTextSelect?: (data: SelectionData) => void
   onEditSave?: (segmentIdx: number, text: string) => void
+  onTranslationEdit?: (segmentIdx: number, enText: string) => void
   onHide?: (segmentIdx: number) => void
   onUnhide?: (segmentIdx: number) => void
   markers?: Marker[]
@@ -146,6 +147,7 @@ function SegmentRow({
   onSeek,
   onTextSelect,
   onEditSave,
+  onTranslationEdit,
   onHide,
   onUnhide,
   activeRef,
@@ -161,6 +163,7 @@ function SegmentRow({
   onSeek: (s: number) => void
   onTextSelect?: (data: SelectionData) => void
   onEditSave?: (idx: number, text: string) => void
+  onTranslationEdit?: (idx: number, enText: string) => void
   onHide?: (idx: number) => void
   onUnhide?: (idx: number) => void
   activeRef: React.RefCallback<HTMLDivElement>
@@ -168,12 +171,13 @@ function SegmentRow({
   const [hovering, setHovering] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editValue, setEditValue] = useState(seg.text)
+  const [editingEn, setEditingEn] = useState(false)
+  const [enValue, setEnValue] = useState(translation?.enText ?? '')
   const textRef = useRef<HTMLParagraphElement>(null)
 
-  // Keep editValue in sync when not editing
-  useEffect(() => {
-    if (!editing) setEditValue(seg.text)
-  }, [seg.text, editing])
+  // Sync values when props change
+  useEffect(() => { if (!editing) setEditValue(seg.text) }, [seg.text, editing])
+  useEffect(() => { if (!editingEn) setEnValue(translation?.enText ?? '') }, [translation?.enText, editingEn])
 
   function handleMouseUp(e: React.MouseEvent) {
     if (editing || !onTextSelect) return
@@ -312,54 +316,98 @@ function SegmentRow({
         )}
       </div>
 
-      {editing ? (
-        <textarea
-          value={editValue}
-          onChange={e => setEditValue(e.target.value)}
-          onBlur={commitEdit}
-          onKeyDown={e => {
-            if (e.key === 'Escape') { setEditing(false); setEditValue(seg.text) }
-          }}
-          autoFocus
-          rows={Math.max(2, editValue.split('\n').length)}
-          className="w-full rounded-lg px-2 py-1.5 resize-none"
-          style={{
-            fontFamily: "'Noto Sans Telugu', 'Noto Sans', var(--font-sans), sans-serif",
-            fontSize: 14,
-            lineHeight: 1.65,
-            color: '#1A1F2C',
-            background: '#FFF8E8',
-            border: '1px solid #B8842A',
-            outline: 'none',
-          }}
-        />
+      {showTranslation && translation ? (
+        /* Side-by-side: Telugu | English */
+        <div className="grid grid-cols-2 gap-3 mt-0.5">
+          {/* Left: original */}
+          <div
+            className="rounded-lg px-2.5 py-2"
+            style={{ background: '#F5F1E9', borderLeft: '2px solid #DDD4C2' }}
+          >
+            {editing ? (
+              <textarea
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+                onBlur={commitEdit}
+                onKeyDown={e => { if (e.key === 'Escape') { setEditing(false); setEditValue(seg.text) } }}
+                autoFocus
+                rows={Math.max(2, editValue.split('\n').length)}
+                className="w-full resize-none outline-none"
+                style={{ fontFamily: "'Noto Sans Telugu','Noto Sans',var(--font-sans),sans-serif", fontSize: 13, lineHeight: 1.6, color: '#1A1F2C', background: 'transparent' }}
+              />
+            ) : (
+              <p
+                ref={textRef}
+                onMouseUp={handleMouseUp}
+                style={{ fontFamily: "'Noto Sans Telugu','Noto Sans',var(--font-sans),sans-serif", fontSize: 13, lineHeight: 1.6, color: '#4A5263', userSelect: onTextSelect ? 'text' : undefined }}
+              >
+                {seg.text}
+              </p>
+            )}
+          </div>
+          {/* Right: English translation (editable) */}
+          <div
+            className="rounded-lg px-2.5 py-2 group/en"
+            style={{ background: '#F0F7F7', borderLeft: '2px solid #0E5C5C40', cursor: editingEn ? 'default' : 'text' }}
+            onClick={() => { if (!editingEn && onTranslationEdit) setEditingEn(true) }}
+          >
+            {editingEn ? (
+              <textarea
+                value={enValue}
+                onChange={e => setEnValue(e.target.value)}
+                onBlur={() => {
+                  setEditingEn(false)
+                  const trimmed = enValue.trim()
+                  if (trimmed !== (translation?.enText ?? '')) onTranslationEdit?.(idx, trimmed)
+                }}
+                onKeyDown={e => { if (e.key === 'Escape') { setEditingEn(false); setEnValue(translation?.enText ?? '') } }}
+                autoFocus
+                rows={Math.max(2, enValue.split('\n').length)}
+                className="w-full resize-none outline-none"
+                style={{ fontSize: 13, lineHeight: 1.6, color: '#1A1F2C', background: 'transparent' }}
+              />
+            ) : (
+              <div className="relative">
+                <p style={{ fontSize: 13, lineHeight: 1.6, color: '#0E5C5C' }}>
+                  {translation.enText || <span style={{ color: '#B5BBC4', fontStyle: 'italic' }}>No translation</span>}
+                  {translation.confidence === 'low' && (
+                    <span title="Low confidence" style={{ marginLeft: 4, color: '#B8842A', fontSize: 11 }}>~</span>
+                  )}
+                </p>
+                {onTranslationEdit && (
+                  <span
+                    className="absolute top-0 right-0 opacity-0 group-hover/en:opacity-100 transition-opacity text-xs"
+                    style={{ color: '#8A929C' }}
+                  >
+                    click to edit
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       ) : (
-        <p
-          ref={textRef}
-          onMouseUp={handleMouseUp}
-          style={{
-            fontFamily: "'Noto Sans Telugu', 'Noto Sans', var(--font-sans), sans-serif",
-            fontSize: 14,
-            lineHeight: 1.65,
-            color: isActive ? '#1A1F2C' : '#4A5263',
-            userSelect: onTextSelect ? 'text' : undefined,
-          }}
-        >
-          {seg.text}
-        </p>
-      )}
-
-      {/* Inline translation */}
-      {showTranslation && translation && !editing && (
-        <p
-          className="mt-1 text-xs leading-relaxed"
-          style={{ color: '#8A929C', fontStyle: 'italic', lineHeight: 1.6 }}
-        >
-          {translation.enText}
-          {translation.confidence === 'low' && (
-            <span title="Low confidence translation" style={{ marginLeft: 4, opacity: 0.6 }}>~</span>
-          )}
-        </p>
+        /* Normal single-column view */
+        editing ? (
+          <textarea
+            value={editValue}
+            onChange={e => setEditValue(e.target.value)}
+            onBlur={commitEdit}
+            onKeyDown={e => { if (e.key === 'Escape') { setEditing(false); setEditValue(seg.text) } }}
+            autoFocus
+            rows={Math.max(2, editValue.split('\n').length)}
+            className="w-full rounded-lg px-2 py-1.5 resize-none"
+            style={{ fontFamily: "'Noto Sans Telugu','Noto Sans',var(--font-sans),sans-serif", fontSize: 14, lineHeight: 1.65, color: '#1A1F2C', background: '#FFF8E8', border: '1px solid #B8842A', outline: 'none' }}
+          />
+        ) : (
+          <p
+            ref={textRef}
+            onMouseUp={handleMouseUp}
+            style={{ fontFamily: "'Noto Sans Telugu','Noto Sans',var(--font-sans),sans-serif", fontSize: 14, lineHeight: 1.65, color: isActive ? '#1A1F2C' : '#4A5263', userSelect: onTextSelect ? 'text' : undefined }}
+          >
+            {seg.text}
+          </p>
+        )
       )}
     </div>
   )
@@ -373,6 +421,7 @@ export default function SegmentList({
   onUpdateSpeaker,
   onTextSelect,
   onEditSave,
+  onTranslationEdit,
   onHide,
   onUnhide,
   markers = [],
@@ -492,6 +541,7 @@ export default function SegmentList({
               onSeek={onSeek}
               onTextSelect={onTextSelect}
               onEditSave={onEditSave}
+              onTranslationEdit={onTranslationEdit}
               onHide={onHide}
               onUnhide={onUnhide}
               activeRef={(el) => {

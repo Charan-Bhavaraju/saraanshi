@@ -2,6 +2,42 @@
 
 import { useState, useRef, useEffect } from 'react'
 
+function CheckOption({
+  checked,
+  onChange,
+  label,
+  activeColor,
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  label: string
+  activeColor: string
+}) {
+  return (
+    <label
+      className="flex items-center gap-2.5 cursor-pointer select-none"
+      onClick={e => e.stopPropagation()}
+    >
+      <div
+        className="flex items-center justify-center rounded transition-all shrink-0"
+        style={{
+          width: 15, height: 15,
+          border: `1.5px solid ${checked ? activeColor : '#B5BBC4'}`,
+          background: checked ? activeColor : 'transparent',
+        }}
+      >
+        {checked && (
+          <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+            <path d="M1.5 4.5l2 2 4-4" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </div>
+      <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} className="sr-only" />
+      <span className="text-xs" style={{ color: '#4A5263' }}>{label}</span>
+    </label>
+  )
+}
+
 const FORMATS = [
   { key: 'txt',    label: 'Plain text',        ext: '.txt',  description: 'Speaker text, no timestamps' },
   { key: 'txt-ts', label: 'Text + timestamps', ext: '.txt',  description: 'With [mm:ss] and speaker labels' },
@@ -11,11 +47,12 @@ const FORMATS = [
   { key: 'quotes', label: 'Quotes only',       ext: '.txt',  description: 'Marked quote excerpts' },
 ] as const
 
-type Props = { interviewId: string }
+type Props = { interviewId: string; hasTranslation?: boolean }
 
-export default function ExportMenu({ interviewId }: Props) {
+export default function ExportMenu({ interviewId, hasTranslation = false }: Props) {
   const [open, setOpen] = useState(false)
   const [includeHidden, setIncludeHidden] = useState(false)
+  const [useEnglish, setUseEnglish] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -28,8 +65,10 @@ export default function ExportMenu({ interviewId }: Props) {
   }, [open])
 
   function exportUrl(format: string) {
-    const base = `/api/interviews/${interviewId}/export?format=${format}`
-    return includeHidden ? `${base}&includeHidden=true` : base
+    let url = `/api/interviews/${interviewId}/export?format=${format}`
+    if (includeHidden) url += '&includeHidden=true'
+    if (useEnglish && hasTranslation) url += '&lang=en'
+    return url
   }
 
   return (
@@ -57,38 +96,25 @@ export default function ExportMenu({ interviewId }: Props) {
           className="absolute right-0 top-full mt-1.5 rounded-xl overflow-hidden z-50 w-60"
           style={{ background: '#FFFFFF', border: '1px solid #ECE6D9', boxShadow: '0 8px 24px rgba(0,0,0,0.08)' }}
         >
-          {/* Checkbox option */}
+          {/* Options */}
           <div
-            className="px-4 py-2.5"
+            className="px-4 py-2.5 flex flex-col gap-2"
             style={{ borderBottom: '1px solid #ECE6D9' }}
           >
-            <label
-              className="flex items-center gap-2.5 cursor-pointer select-none"
-              onClick={e => e.stopPropagation()}
-            >
-              <div
-                className="flex items-center justify-center rounded transition-all shrink-0"
-                style={{
-                  width: 15,
-                  height: 15,
-                  border: `1.5px solid ${includeHidden ? '#0E5C5C' : '#B5BBC4'}`,
-                  background: includeHidden ? '#0E5C5C' : 'transparent',
-                }}
-              >
-                {includeHidden && (
-                  <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
-                    <path d="M1.5 4.5l2 2 4-4" stroke="white" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </div>
-              <input
-                type="checkbox"
-                checked={includeHidden}
-                onChange={e => setIncludeHidden(e.target.checked)}
-                className="sr-only"
+            {hasTranslation && (
+              <CheckOption
+                checked={useEnglish}
+                onChange={setUseEnglish}
+                label="Export in English (translated)"
+                activeColor="#0E5C5C"
               />
-              <span className="text-xs" style={{ color: '#4A5263' }}>Include hidden segments</span>
-            </label>
+            )}
+            <CheckOption
+              checked={includeHidden}
+              onChange={setIncludeHidden}
+              label="Include hidden segments"
+              activeColor="#8A929C"
+            />
           </div>
 
           {/* Format list */}

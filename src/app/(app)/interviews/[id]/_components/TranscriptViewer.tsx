@@ -85,6 +85,19 @@ export default function TranscriptViewer({
     await saveSegmentEdit(interviewId, transcriptId, segmentIdx, text)
   }, [interviewId, transcriptId])
 
+  const handleTranslationEdit = useCallback(async (segmentIdx: number, enText: string) => {
+    if (!transcriptId) return
+    const updated = translationSegments.map(t =>
+      t.segmentIdx === segmentIdx ? { ...t, enText } : t
+    )
+    // If this segment didn't have a translation entry yet, add one
+    if (!updated.find(t => t.segmentIdx === segmentIdx)) {
+      updated.push({ segmentIdx, enText, confidence: 'high' })
+    }
+    setTranslationSegments(updated)
+    await saveTranslation(transcriptId, interviewId, updated)
+  }, [transcriptId, interviewId, translationSegments])
+
   const handleHideSegment = useCallback(async (segmentIdx: number) => {
     if (!transcriptId) return
     const seg = localSegments[segmentIdx]
@@ -212,6 +225,7 @@ export default function TranscriptViewer({
             onUpdateSpeaker={handleUpdateSpeaker}
             onTextSelect={transcriptId ? setSelectionData : undefined}
             onEditSave={transcriptId ? handleEditSave : undefined}
+            onTranslationEdit={transcriptId ? handleTranslationEdit : undefined}
             onHide={transcriptId ? handleHideSegment : undefined}
             onUnhide={transcriptId ? handleUnhideSegment : undefined}
             markers={localMarkers}

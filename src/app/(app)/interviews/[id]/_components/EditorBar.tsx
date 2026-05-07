@@ -137,7 +137,7 @@ export default function EditorBar({
         </button>
       )}
 
-      <ExportMenu interviewId={interviewId} />
+      <ExportMenu interviewId={interviewId} hasTranslation={hasTranslation} />
     </div>
   )
 }
