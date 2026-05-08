@@ -3,7 +3,7 @@
 import { db } from '@/db'
 import { interviews, transcripts, markers } from '@/db/schema'
 import { InterviewCreateSchema, InterviewUpdateSchema, InterviewAudioSchema } from '@/lib/validations/interview'
-import { eq, isNull, and } from 'drizzle-orm'
+import { eq, isNull, and, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import type { TranscriptSegment, TranslationSegment, MarkerInsert } from '@/types/database'
@@ -209,25 +209,19 @@ export async function hideSegment(
   segmentIdx: number,
   hidden: boolean,
 ) {
-  const [row] = await db
-    .select({ segments: transcripts.segments })
-    .from(transcripts)
-    .where(eq(transcripts.id, transcriptId))
-    .limit(1)
-
-  if (!row) return
-
-  const segs = (row.segments ?? []) as TranscriptSegment[]
-  if (!segs[segmentIdx]) return
-
-  segs[segmentIdx] = { ...segs[segmentIdx], hidden }
-
-  await db
-    .update(transcripts)
-    .set({ segments: segs })
-    .where(eq(transcripts.id, transcriptId))
-
-  revalidatePath(`/interviews/${interviewId}`)
+  // Atomic jsonb_set — no read needed, safe under concurrent rapid clicks
+  await db.execute(sql`
+    UPDATE transcripts
+    SET segments = jsonb_set(
+      segments,
+      ARRAY[${segmentIdx}::text],
+      (COALESCE(segments->${segmentIdx}, '{}'::jsonb)) || jsonb_build_object('hidden', ${hidden}),
+      false
+    )
+    WHERE id = ${transcriptId}
+  `)
+  // No revalidatePath — optimistic UI already reflects the change
+  void interviewId
 }
 
 export async function markReviewed(interviewId: string) {

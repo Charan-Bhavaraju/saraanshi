@@ -71,18 +71,25 @@ export default function TranscriptViewer({
   const handleUpdateSpeaker = useCallback(async (speakerId: string, label: string) => {
     const next = { ...speakerMap, [speakerId]: label }
     setSpeakerMap(next)
-    await updateSpeakerMap(interviewId, next)
+    try {
+      await updateSpeakerMap(interviewId, next)
+    } catch (e) {
+      console.error('updateSpeakerMap failed', e)
+    }
   }, [interviewId, speakerMap])
 
   const handleEditSave = useCallback(async (segmentIdx: number, text: string) => {
     if (!transcriptId) return
-    // Optimistic update
     setLocalSegments(prev => prev.map((s, i) =>
       i === segmentIdx
         ? { ...s, text, edited: true, editedByHuman: true, originalText: s.editedByHuman ? s.originalText : s.text }
         : s
     ))
-    await saveSegmentEdit(interviewId, transcriptId, segmentIdx, text)
+    try {
+      await saveSegmentEdit(interviewId, transcriptId, segmentIdx, text)
+    } catch (e) {
+      console.error('saveSegmentEdit failed', e)
+    }
   }, [interviewId, transcriptId])
 
   const handleTranslationEdit = useCallback(async (segmentIdx: number, enText: string) => {
@@ -90,12 +97,15 @@ export default function TranscriptViewer({
     const updated = translationSegments.map(t =>
       t.segmentIdx === segmentIdx ? { ...t, enText } : t
     )
-    // If this segment didn't have a translation entry yet, add one
     if (!updated.find(t => t.segmentIdx === segmentIdx)) {
       updated.push({ segmentIdx, enText, confidence: 'high' })
     }
     setTranslationSegments(updated)
-    await saveTranslation(transcriptId, interviewId, updated)
+    try {
+      await saveTranslation(transcriptId, interviewId, updated)
+    } catch (e) {
+      console.error('saveTranslation failed', e)
+    }
   }, [transcriptId, interviewId, translationSegments])
 
   const handleHideSegment = useCallback(async (segmentIdx: number) => {
@@ -106,7 +116,14 @@ export default function TranscriptViewer({
     setUndoSegment({ idx: segmentIdx, text: seg.text })
     if (undoTimer.current) clearTimeout(undoTimer.current)
     undoTimer.current = setTimeout(() => setUndoSegment(null), 5000)
-    await hideSegment(interviewId, transcriptId, segmentIdx, true)
+    try {
+      await hideSegment(interviewId, transcriptId, segmentIdx, true)
+    } catch (e) {
+      console.error('hideSegment failed', e)
+      // Revert optimistic update on failure
+      setLocalSegments(prev => prev.map((s, i) => i === segmentIdx ? { ...s, hidden: false } : s))
+      setUndoSegment(null)
+    }
   }, [interviewId, transcriptId, localSegments])
 
   const handleUnhideSegment = useCallback(async (segmentIdx: number) => {
@@ -114,7 +131,13 @@ export default function TranscriptViewer({
     setLocalSegments(prev => prev.map((s, i) => i === segmentIdx ? { ...s, hidden: false } : s))
     if (undoTimer.current) clearTimeout(undoTimer.current)
     setUndoSegment(null)
-    await hideSegment(interviewId, transcriptId, segmentIdx, false)
+    try {
+      await hideSegment(interviewId, transcriptId, segmentIdx, false)
+    } catch (e) {
+      console.error('unhideSegment failed', e)
+      // Revert optimistic update on failure
+      setLocalSegments(prev => prev.map((s, i) => i === segmentIdx ? { ...s, hidden: true } : s))
+    }
   }, [interviewId, transcriptId])
 
   const handleCreateMarker = useCallback(async (type: MarkerType) => {
