@@ -15,6 +15,7 @@ import { contacts } from './contacts'
 export const interviewTypeEnum = pgEnum('interview_type', [
   'patient',
   'doctor',
+  'survivor',
   'other',
 ])
 

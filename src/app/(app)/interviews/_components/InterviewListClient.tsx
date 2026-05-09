@@ -17,19 +17,21 @@ const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }
 }
 
 const TYPE_PILL: Record<string, { label: string; bg: string; color: string }> = {
-  patient: { label: 'Patient', bg: '#FDF0F4', color: '#B8456D' },
-  doctor:  { label: 'Doctor',  bg: '#E2EEEC', color: '#0E5C5C' },
-  other:   { label: 'Other',   bg: '#F5F1E9', color: '#8A929C' },
+  patient:  { label: 'Patient',  bg: '#FDF0F4', color: '#B8456D' },
+  doctor:   { label: 'Doctor',   bg: '#E2EEEC', color: '#0E5C5C' },
+  survivor: { label: 'Survivor', bg: '#FFF3E0', color: '#B8842A' },
+  other:    { label: 'Other',    bg: '#F5F1E9', color: '#8A929C' },
 }
 
 const LANG_LABELS: Record<string, string> = { en: 'English', te: 'Telugu', mixed: 'Mixed' }
 
-type Filter = 'all' | 'patients' | 'doctors' | 'in_progress' | 'transcribed' | 'reviewed'
+type Filter = 'all' | 'patients' | 'doctors' | 'survivors' | 'in_progress' | 'transcribed' | 'reviewed'
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'patients', label: 'Patients' },
   { key: 'doctors', label: 'Doctors' },
+  { key: 'survivors', label: 'Survivors' },
   { key: 'in_progress', label: 'In progress' },
   { key: 'transcribed', label: 'Transcribed' },
   { key: 'reviewed', label: 'Reviewed' },
@@ -40,6 +42,7 @@ function matchesFilter(interview: InterviewWithContact, filter: Filter): boolean
     case 'all': return true
     case 'patients': return interview.type === 'patient'
     case 'doctors': return interview.type === 'doctor'
+    case 'survivors': return interview.type === 'survivor'
     case 'in_progress': return ['uploading', 'uploaded', 'transcribing'].includes(interview.status)
     case 'transcribed': return interview.status === 'transcribed'
     case 'reviewed': return ['reviewed', 'analyzed'].includes(interview.status)
@@ -70,6 +73,7 @@ export default function InterviewListClient({ interviews }: { interviews: Interv
     all: localInterviews.length,
     patients: localInterviews.filter(i => i.type === 'patient').length,
     doctors: localInterviews.filter(i => i.type === 'doctor').length,
+    survivors: localInterviews.filter(i => i.type === 'survivor').length,
     in_progress: localInterviews.filter(i => ['uploading', 'uploaded', 'transcribing'].includes(i.status)).length,
     transcribed: localInterviews.filter(i => i.status === 'transcribed').length,
     reviewed: localInterviews.filter(i => ['reviewed', 'analyzed'].includes(i.status)).length,

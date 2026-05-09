@@ -16,6 +16,7 @@ type ContactOption = {
 const TYPE_OPTIONS: { value: InterviewType; label: string }[] = [
   { value: 'patient', label: 'Patient' },
   { value: 'doctor', label: 'Doctor / Clinician' },
+  { value: 'survivor', label: 'Survivor' },
   { value: 'other', label: 'Other (admin, gatekeeper…)' },
 ]
 

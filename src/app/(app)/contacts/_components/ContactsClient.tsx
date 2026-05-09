@@ -11,6 +11,7 @@ const TYPE_FILTERS: { type: ContactType | 'all'; label: string }[] = [
   { type: 'hospital', label: 'Hospitals' },
   { type: 'doctor', label: 'Doctors' },
   { type: 'patient', label: 'Patients' },
+  { type: 'survivor', label: 'Survivors' },
   { type: 'receptionist', label: 'Staff' },
 ]
 
@@ -50,6 +51,7 @@ export default function ContactsClient({
     hospital: contacts.filter(c => c.type === 'hospital').length,
     doctor: contacts.filter(c => c.type === 'doctor').length,
     patient: contacts.filter(c => c.type === 'patient').length,
+    survivor: contacts.filter(c => c.type === 'survivor').length,
     receptionist: contacts.filter(c => c.type === 'receptionist').length,
   }), [contacts])
 

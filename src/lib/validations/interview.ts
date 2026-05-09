@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 export const InterviewCreateSchema = z.object({
   contactId: z.string().uuid().nullable().optional(),
-  type: z.enum(['patient', 'doctor', 'other']).default('other'),
+  type: z.enum(['patient', 'doctor', 'survivor', 'other']).default('other'),
   participantCode: z.string().min(1).max(20).optional().nullable(),
   conductedAt: z.string().datetime().optional().nullable(),
   location: z.string().max(300).optional().nullable(),

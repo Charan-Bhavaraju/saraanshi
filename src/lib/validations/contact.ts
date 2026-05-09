@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const ContactSchema = z.object({
-  type: z.enum(['hospital', 'doctor', 'receptionist', 'patient', 'other']),
+  type: z.enum(['hospital', 'doctor', 'receptionist', 'patient', 'survivor', 'other']),
   displayName: z.string().min(1, 'Name is required').max(200),
   realName: z.string().max(200).optional().nullable(),
   organization: z.string().max(200).optional().nullable(),

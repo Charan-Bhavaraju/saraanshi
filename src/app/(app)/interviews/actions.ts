@@ -94,8 +94,8 @@ export async function deleteInterview(id: string) {
 }
 
 // Auto-suggest next participant code based on interview type and existing count
-export async function suggestParticipantCode(type: 'patient' | 'doctor' | 'other'): Promise<string> {
-  const prefix = type === 'patient' ? 'P' : type === 'doctor' ? 'D' : 'X'
+export async function suggestParticipantCode(type: 'patient' | 'doctor' | 'survivor' | 'other'): Promise<string> {
+  const prefix = type === 'patient' ? 'P' : type === 'doctor' ? 'D' : type === 'survivor' ? 'S' : 'X'
 
   const existing = await db
     .select({ participantCode: interviews.participantCode })

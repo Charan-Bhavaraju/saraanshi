@@ -7,7 +7,7 @@ import { ContactSchema, type ContactFormValues } from '@/lib/validations/contact
 import { createContact, updateContact } from '../actions'
 import type { Contact } from '@/types/database'
 
-const TYPES = ['hospital', 'doctor', 'receptionist', 'patient', 'other'] as const
+const TYPES = ['hospital', 'doctor', 'receptionist', 'patient', 'survivor', 'other'] as const
 const STATUSES = ['lead', 'contacted', 'interested', 'scheduled', 'interviewed', 'declined', 'done', 'no_response'] as const
 const CONSENT_STATUSES = ['not_yet', 'verbal', 'written', 'withdrawn'] as const
 

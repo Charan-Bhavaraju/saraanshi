@@ -13,6 +13,7 @@ export const contactTypeEnum = pgEnum('contact_type', [
   'doctor',
   'receptionist',
   'patient',
+  'survivor',
   'other',
 ])
 
