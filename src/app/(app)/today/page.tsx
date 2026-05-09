@@ -81,7 +81,13 @@ function getWelcomeMessage(interviewed: number, inConversation: number): string 
 }
 
 export default async function TodayPage() {
-  const [stats, recentInterviews] = await Promise.all([getStats(), getRecentInterviews()])
+  const [stats, recentInterviews] = await Promise.all([
+    getStats().catch(() => ({
+      total: 0, inConversation: 0, interviewed: 0, tasksDueToday: 0,
+      todayTodoTasks: [], todayDoneTasks: [],
+    })),
+    getRecentInterviews().catch(() => []),
+  ])
   const greeting = getGreeting()
   const dayLabel = formatDayHeader()
 

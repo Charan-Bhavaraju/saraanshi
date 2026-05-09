@@ -12,12 +12,11 @@ if (!process.env.DATABASE_URL) {
 
 const client = globalForDb._pgClient ?? postgres(process.env.DATABASE_URL, {
   prepare: false,
-  max: isDev ? 5 : 1,
-  idle_timeout: 30,
+  // 3 connections per serverless instance: enough for concurrent page queries without
+  // overwhelming Supabase's pgbouncer (transaction mode — no session state needed)
+  max: isDev ? 5 : 3,
+  idle_timeout: 20,
   connect_timeout: 8,
-  connection: {
-    statement_timeout: 20000,
-  },
 })
 
 if (process.env.NODE_ENV !== 'production') globalForDb._pgClient = client

@@ -6,9 +6,6 @@ import { isNull, eq, asc } from 'drizzle-orm'
 import type { TaskWithContact } from '@/types/database'
 import TasksClient from './_components/TasksClient'
 
-// Bust immediately via revalidatePath('/tasks') in server actions; 30s TTL as safety-net
-export const revalidate = 30
-
 async function getTasks(): Promise<TaskWithContact[]> {
   const rows = await db
     .select({
@@ -45,7 +42,7 @@ async function getTasks(): Promise<TaskWithContact[]> {
 }
 
 export default async function TasksPage() {
-  const allTasks = await getTasks()
+  const allTasks = await getTasks().catch(() => [] as TaskWithContact[])
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 pb-32">

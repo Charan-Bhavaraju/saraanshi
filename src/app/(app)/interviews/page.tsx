@@ -38,7 +38,7 @@ async function getInterviews(): Promise<InterviewWithContact[]> {
 }
 
 export default async function InterviewsPage() {
-  const allInterviews = await getInterviews()
+  const allInterviews = await getInterviews().catch(() => [] as Awaited<ReturnType<typeof getInterviews>>)
 
   const stats = {
     total: allInterviews.length,

@@ -16,7 +16,7 @@ async function getContacts() {
 }
 
 export default async function ContactsPage() {
-  const allContacts = await getContacts()
+  const allContacts = await getContacts().catch(() => [] as Awaited<ReturnType<typeof getContacts>>)
 
   // Default to kanban on wide screens, list on narrow — we pass 'list' as
   // default and let the client toggle. The CSS media breakpoint is md (768px).
