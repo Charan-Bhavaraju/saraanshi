@@ -85,6 +85,7 @@ export default function AppHeader({
             <Link
               key={tab.href}
               href={tab.href}
+              prefetch={false}
               className={cn(
                 'px-3 py-1.5 text-sm font-medium whitespace-nowrap rounded-md transition-all',
                 active

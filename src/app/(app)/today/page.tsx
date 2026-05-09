@@ -2,75 +2,68 @@ export const dynamic = 'force-dynamic'
 
 import { db } from '@/db'
 import { contacts, tasks, interviews } from '@/db/schema'
-import { isNull, eq, and, gte, lt, inArray, desc } from 'drizzle-orm'
+import { isNull, eq, and, gte, lt, desc } from 'drizzle-orm'
 import { startOfDay, endOfDay, addDays, getGreeting, formatDayHeader } from '@/lib/utils'
 import Link from 'next/link'
 import TodayTaskList from './_components/TodayTaskList'
 import StatusBadge from '../interviews/[id]/_components/StatusBadge'
 
-async function getStats() {
+async function getPageData() {
   const now = new Date()
   const todayStart = startOfDay(now)
   const todayEnd = endOfDay(now)
+  const tomorrowEnd = endOfDay(addDays(now, 1))
 
-  // Phase 1: all independent queries in parallel (saves ~3 sequential round-trips)
-  const [allContacts, todoTasks, doneTasks, tasksDueCount] = await Promise.all([
+  // 3 parallel queries instead of the previous 6 — halves DB round-trips
+  const [allContacts, allWindowTasks, recentInterviews] = await Promise.all([
     db.select({ id: contacts.id, status: contacts.status })
       .from(contacts)
       .where(isNull(contacts.deletedAt)),
 
-    db.select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt, status: tasks.status, contactId: tasks.contactId })
+    // Single query covers todo+done tasks for today and tasksDueCount (filter in JS)
+    db.select({
+      id: tasks.id, title: tasks.title, dueAt: tasks.dueAt,
+      status: tasks.status, contactId: tasks.contactId,
+      contact: { id: contacts.id, displayName: contacts.displayName, organization: contacts.organization },
+    })
       .from(tasks)
-      .where(and(isNull(tasks.deletedAt), eq(tasks.status, 'todo'), gte(tasks.dueAt, todayStart), lt(tasks.dueAt, todayEnd)))
-      .limit(8),
+      .leftJoin(contacts, eq(tasks.contactId, contacts.id))
+      .where(and(isNull(tasks.deletedAt), gte(tasks.dueAt, todayStart), lt(tasks.dueAt, tomorrowEnd)))
+      .limit(50),
 
-    db.select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt, status: tasks.status, contactId: tasks.contactId })
-      .from(tasks)
-      .where(and(isNull(tasks.deletedAt), eq(tasks.status, 'done'), gte(tasks.dueAt, todayStart), lt(tasks.dueAt, todayEnd)))
-      .limit(8),
-
-    db.select({ id: tasks.id })
-      .from(tasks)
-      .where(and(isNull(tasks.deletedAt), eq(tasks.status, 'todo'), gte(tasks.dueAt, todayStart), lt(tasks.dueAt, endOfDay(addDays(now, 1))))),
-  ])
-
-  // Phase 2: task contacts (depends on phase 1 results)
-  const taskContactIds = [...todoTasks, ...doneTasks].flatMap(t => t.contactId ? [t.contactId] : [])
-  const taskContacts = taskContactIds.length > 0
-    ? await db.select({ id: contacts.id, displayName: contacts.displayName, organization: contacts.organization })
-        .from(contacts)
-        .where(inArray(contacts.id, taskContactIds))
-    : []
-
-  const contactMap = Object.fromEntries(taskContacts.map(c => [c.id, c]))
-  function attachContact<T extends { contactId: string | null }>(t: T) {
-    return { ...t, contact: t.contactId ? contactMap[t.contactId] ?? null : null }
-  }
-
-  return {
-    total: allContacts.length,
-    inConversation: allContacts.filter(c => ['contacted', 'interested', 'scheduled'].includes(c.status)).length,
-    interviewed: allContacts.filter(c => ['interviewed', 'done'].includes(c.status)).length,
-    tasksDueToday: tasksDueCount.length,
-    todayTodoTasks: todoTasks.map(attachContact),
-    todayDoneTasks: doneTasks.map(attachContact),
-  }
-}
-
-async function getRecentInterviews() {
-  return db
-    .select({
+    db.select({
       id: interviews.id,
       participantCode: interviews.participantCode,
       status: interviews.status,
       conductedAt: interviews.conductedAt,
       contactName: contacts.displayName,
     })
-    .from(interviews)
-    .leftJoin(contacts, eq(interviews.contactId, contacts.id))
-    .where(isNull(interviews.deletedAt))
-    .orderBy(desc(interviews.createdAt))
-    .limit(4)
+      .from(interviews)
+      .leftJoin(contacts, eq(interviews.contactId, contacts.id))
+      .where(isNull(interviews.deletedAt))
+      .orderBy(desc(interviews.createdAt))
+      .limit(4),
+  ])
+
+  const todoTasks = allWindowTasks
+    .filter(t => t.status === 'todo' && t.dueAt && t.dueAt < todayEnd)
+    .slice(0, 8)
+  const doneTasks = allWindowTasks
+    .filter(t => t.status === 'done' && t.dueAt && t.dueAt < todayEnd)
+    .slice(0, 8)
+  const tasksDueToday = allWindowTasks.filter(t => t.status === 'todo').length
+
+  return {
+    stats: {
+      total: allContacts.length,
+      inConversation: allContacts.filter(c => ['contacted', 'interested', 'scheduled'].includes(c.status)).length,
+      interviewed: allContacts.filter(c => ['interviewed', 'done'].includes(c.status)).length,
+      tasksDueToday,
+      todayTodoTasks: todoTasks,
+      todayDoneTasks: doneTasks,
+    },
+    recentInterviews,
+  }
 }
 
 function getWelcomeMessage(interviewed: number, inConversation: number): string {
@@ -81,13 +74,10 @@ function getWelcomeMessage(interviewed: number, inConversation: number): string 
 }
 
 export default async function TodayPage() {
-  const [stats, recentInterviews] = await Promise.all([
-    getStats().catch(() => ({
-      total: 0, inConversation: 0, interviewed: 0, tasksDueToday: 0,
-      todayTodoTasks: [], todayDoneTasks: [],
-    })),
-    getRecentInterviews().catch(() => []),
-  ])
+  const { stats, recentInterviews } = await getPageData().catch(() => ({
+    stats: { total: 0, inConversation: 0, interviewed: 0, tasksDueToday: 0, todayTodoTasks: [], todayDoneTasks: [] },
+    recentInterviews: [],
+  }))
   const greeting = getGreeting()
   const dayLabel = formatDayHeader()
 
