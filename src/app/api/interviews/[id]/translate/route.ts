@@ -4,9 +4,60 @@ import { interviews, transcripts } from '@/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { TranscriptSegment, TranslationSegment } from '@/types/database'
 
-// POST /api/interviews/[id]/translate
-// Translates all segments to English using Claude (Sonnet).
-// Gracefully degrades if ANTHROPIC_API_KEY is missing.
+// Allow up to 60s — long transcripts need multiple Haiku batches
+export const maxDuration = 60
+
+const BATCH_SIZE = 40
+const VALID_CONFIDENCE = new Set(['high', 'medium', 'low'])
+
+async function translateBatch(
+  client: { messages: { create: (opts: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }>; stop_reason: string }> } },
+  batch: Array<{ idx: number; text: string }>,
+): Promise<TranslationSegment[]> {
+  const prompt = `Translate these Telugu-English interview segments to English for medical research. Return ONLY a JSON array — no markdown, no explanation.
+
+Input: ${JSON.stringify(batch)}
+
+Output format: [{"idx":0,"enText":"...","confidence":"high|medium|low"}]
+Rules:
+- Already-English segments: return as-is with confidence "high"
+- Preserve clinical/medical terms and direct speech
+- confidence: high=clear, medium=partial mix, low=unclear`
+
+  const message = await client.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 4096,
+    messages: [
+      { role: 'user', content: prompt },
+      { role: 'assistant', content: '[' },
+    ],
+  })
+
+  if (message.stop_reason === 'max_tokens') {
+    throw new Error(`Batch hit max_tokens (${batch.length} segments, first idx ${batch[0]?.idx})`)
+  }
+
+  const rawText = message.content[0]?.type === 'text' ? message.content[0].text.trim() : ''
+  const raw = ('[' + rawText).replace(/```$/, '').trim()
+
+  let parsed: Array<{ idx: unknown; enText: unknown; confidence: unknown }>
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error(`JSON parse failed for batch starting at idx ${batch[0]?.idx}: ${raw.slice(0, 100)}`)
+  }
+
+  if (!Array.isArray(parsed)) throw new Error('Response is not an array')
+
+  return parsed
+    .filter(p => typeof p.idx === 'number' && typeof p.enText === 'string' && p.enText.length > 0)
+    .map(p => ({
+      segmentIdx: p.idx as number,
+      enText: (p.enText as string).trim(),
+      confidence: (VALID_CONFIDENCE.has(p.confidence as string) ? p.confidence : 'medium') as TranslationSegment['confidence'],
+    }))
+}
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -35,7 +86,6 @@ export async function POST(
   if (!transcript) return NextResponse.json({ error: 'No transcript' }, { status: 404 })
 
   const allSegments = (transcript.segments as TranscriptSegment[] | null) ?? []
-  // Only translate non-hidden segments to avoid wasting tokens
   const segmentsToTranslate = allSegments
     .map((s, i) => ({ idx: i, text: s.text.trim() }))
     .filter(s => !allSegments[s.idx]?.hidden && s.text.length > 0)
@@ -51,60 +101,21 @@ export async function POST(
       }
     }
 
-    const prompt = `Translate these Telugu-English interview segments to English for medical research. Return ONLY a JSON array — no markdown, no explanation.
-
-Input: ${JSON.stringify(segmentsToTranslate)}
-
-Output format: [{"idx":0,"enText":"...","confidence":"high|medium|low"}]
-Rules:
-- Already-English segments: return as-is with confidence "high"
-- Preserve clinical/medical terms and direct speech
-- confidence: high=clear, medium=partial mix, low=unclear`
-
-    const message = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
-      messages: [
-        { role: 'user', content: prompt },
-        // Prime the assistant response with "[" so it cannot emit markdown preamble
-        { role: 'assistant', content: '[' },
-      ],
-    })
-
-    if (message.stop_reason === 'max_tokens') {
-      console.error('[translate] Hit max_tokens — response truncated')
-      return NextResponse.json({ error: 'Translation too long' }, { status: 500 })
+    // Split into batches so no single call exceeds 4096 output tokens
+    const batches: Array<typeof segmentsToTranslate> = []
+    for (let i = 0; i < segmentsToTranslate.length; i += BATCH_SIZE) {
+      batches.push(segmentsToTranslate.slice(i, i + BATCH_SIZE))
     }
 
-    const rawText = message.content[0]?.type === 'text' ? message.content[0].text.trim() : ''
-    // Prepend the primed "[" and strip any trailing code fence the model may add
-    const raw = ('[' + rawText).replace(/```$/, '').trim()
-
-    let parsed: Array<{ idx: unknown; enText: unknown; confidence: unknown }>
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      console.error('[translate] JSON parse failed, raw:', raw.slice(0, 200))
-      return NextResponse.json({ error: 'Translation parse error' }, { status: 500 })
+    const allResults: TranslationSegment[] = []
+    for (const batch of batches) {
+      const batchResult = await translateBatch(client, batch)
+      allResults.push(...batchResult)
     }
 
-    if (!Array.isArray(parsed)) {
-      console.error('[translate] Response is not an array')
-      return NextResponse.json({ error: 'Translation parse error' }, { status: 500 })
-    }
-
-    const VALID_CONFIDENCE = new Set(['high', 'medium', 'low'])
-    const result: TranslationSegment[] = parsed
-      .filter(p => typeof p.idx === 'number' && typeof p.enText === 'string' && p.enText.length > 0)
-      .map(p => ({
-        segmentIdx: p.idx as number,
-        enText: (p.enText as string).trim(),
-        confidence: (VALID_CONFIDENCE.has(p.confidence as string) ? p.confidence : 'medium') as TranslationSegment['confidence'],
-      }))
-
-    return NextResponse.json({ segments: result })
+    return NextResponse.json({ segments: allResults })
   } catch (err) {
-    console.error('[translate] Claude error:', err)
+    console.error('[translate] error:', err)
     return NextResponse.json({ error: 'Translation failed' }, { status: 500 })
   }
 }
