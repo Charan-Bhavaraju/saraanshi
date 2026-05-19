@@ -4,10 +4,12 @@ import { interviews, transcripts } from '@/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { TranscriptSegment, TranslationSegment } from '@/types/database'
 
-// Allow up to 60s — long transcripts need multiple Haiku batches
 export const maxDuration = 60
 
 const BATCH_SIZE = 40
+// Run up to 5 batches in parallel — reduces a 300-segment transcript
+// from ~8 sequential calls (~56s) to 2 parallel rounds (~14s)
+const CONCURRENCY = 5
 const VALID_CONFIDENCE = new Set(['high', 'medium', 'low'])
 
 async function translateBatch(
@@ -101,16 +103,19 @@ export async function POST(
       }
     }
 
-    // Split into batches so no single call exceeds 4096 output tokens
     const batches: Array<typeof segmentsToTranslate> = []
     for (let i = 0; i < segmentsToTranslate.length; i += BATCH_SIZE) {
       batches.push(segmentsToTranslate.slice(i, i + BATCH_SIZE))
     }
 
+    // Process in parallel windows — all batches in a window fire at once,
+    // then the next window starts. Keeps total time proportional to
+    // ceil(batches/CONCURRENCY) × per-batch latency instead of batches × latency.
     const allResults: TranslationSegment[] = []
-    for (const batch of batches) {
-      const batchResult = await translateBatch(client, batch)
-      allResults.push(...batchResult)
+    for (let i = 0; i < batches.length; i += CONCURRENCY) {
+      const window = batches.slice(i, i + CONCURRENCY)
+      const windowResults = await Promise.all(window.map(b => translateBatch(client, b)))
+      allResults.push(...windowResults.flat())
     }
 
     return NextResponse.json({ segments: allResults })
