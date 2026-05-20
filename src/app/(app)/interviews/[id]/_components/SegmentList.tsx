@@ -18,6 +18,7 @@ type Props = {
   markers?: Marker[]
   translationSegments?: TranslationSegment[]
   showTranslation?: boolean
+  hideSource?: boolean
 }
 
 const SPEAKER_COLORS = ['#0E5C5C', '#B8456D', '#6B4FA0', '#B8842A']
@@ -143,6 +144,7 @@ function SegmentRow({
   label,
   translation,
   showTranslation,
+  hideSource,
   segmentMarkers,
   onSeek,
   onTextSelect,
@@ -159,6 +161,7 @@ function SegmentRow({
   label: string
   translation?: TranslationSegment
   showTranslation?: boolean
+  hideSource?: boolean
   segmentMarkers: Marker[]
   onSeek: (s: number) => void
   onTextSelect?: (data: SelectionData) => void
@@ -317,6 +320,45 @@ function SegmentRow({
       </div>
 
       {showTranslation && translation ? (
+        hideSource ? (
+          /* EN-only mode: single wide column, document-like */
+          <div
+            className="rounded-lg px-3 py-2 mt-0.5 group/en"
+            style={{ background: '#F0F7F7', borderLeft: '2px solid #0E5C5C40', cursor: editingEn ? 'default' : 'text' }}
+            onClick={() => { if (!editingEn && onTranslationEdit) setEditingEn(true) }}
+          >
+            {editingEn ? (
+              <textarea
+                value={enValue}
+                onChange={e => setEnValue(e.target.value)}
+                onBlur={() => {
+                  setEditingEn(false)
+                  const trimmed = enValue.trim()
+                  if (trimmed !== (translation?.enText ?? '')) onTranslationEdit?.(idx, trimmed)
+                }}
+                onKeyDown={e => { if (e.key === 'Escape') { setEditingEn(false); setEnValue(translation?.enText ?? '') } }}
+                autoFocus
+                rows={Math.max(2, enValue.split('\n').length)}
+                className="w-full resize-none outline-none"
+                style={{ fontSize: 14, lineHeight: 1.7, color: '#1A1F2C', background: 'transparent' }}
+              />
+            ) : (
+              <div className="relative">
+                <p style={{ fontSize: 14, lineHeight: 1.7, color: '#1A1F2C' }}>
+                  {translation.enText || <span style={{ color: '#B5BBC4', fontStyle: 'italic' }}>No translation</span>}
+                  {translation.confidence === 'low' && (
+                    <span title="Low confidence" style={{ marginLeft: 4, color: '#B8842A', fontSize: 11 }}>~</span>
+                  )}
+                </p>
+                {onTranslationEdit && (
+                  <span className="absolute top-0 right-0 opacity-0 group-hover/en:opacity-100 transition-opacity text-xs" style={{ color: '#8A929C' }}>
+                    click to edit
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
         /* Side-by-side: Telugu | English */
         <div className="grid grid-cols-2 gap-3 mt-0.5">
           {/* Left: original */}
@@ -386,6 +428,7 @@ function SegmentRow({
             )}
           </div>
         </div>
+        )
       ) : (
         /* Normal single-column view */
         editing ? (
@@ -427,6 +470,7 @@ export default function SegmentList({
   markers = [],
   translationSegments,
   showTranslation,
+  hideSource,
 }: Props) {
   const [autoScroll, setAutoScroll] = useState(true)
   const [showHidden, setShowHidden] = useState(false)
@@ -537,6 +581,7 @@ export default function SegmentList({
               label={label}
               translation={translationMap[trueIdx]}
               showTranslation={showTranslation}
+              hideSource={hideSource}
               segmentMarkers={segmentMarkers}
               onSeek={onSeek}
               onTextSelect={onTextSelect}

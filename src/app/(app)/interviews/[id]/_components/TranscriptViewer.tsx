@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import SegmentList from './SegmentList'
 import MarkersList from './MarkersList'
@@ -62,6 +62,20 @@ export default function TranscriptViewer({
 
   const [undoSegment, setUndoSegment] = useState<{ idx: number; text: string } | null>(null)
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [expanded, setExpanded] = useState(false)
+  const [hideSource, setHideSource] = useState(false)
+
+  useEffect(() => {
+    if (!expanded) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpanded(false) }
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [expanded])
 
   const handleSeek = useCallback((seconds: number) => {
     setSeekTo(seconds)
@@ -190,6 +204,7 @@ export default function TranscriptViewer({
   const hasTranslation = translationSegments.length > 0
 
   return (
+    <>
     <div
       className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-[1fr_1.5fr_1fr] gap-0 rounded-[14px] overflow-hidden"
       style={{ border: '1px solid #ECE6D9' }}
@@ -229,6 +244,7 @@ export default function TranscriptViewer({
             onToggleTranslation={() => setShowTranslation(v => !v)}
             onTranslate={handleTranslate}
             isTranslating={isTranslating}
+            onExpand={() => setExpanded(true)}
           />
         )}
         <div className="px-5 pt-4 pb-0">
@@ -254,6 +270,7 @@ export default function TranscriptViewer({
             markers={localMarkers}
             translationSegments={translationSegments}
             showTranslation={showTranslation}
+            hideSource={hideSource}
           />
           {/* Undo toast */}
           {undoSegment && (
@@ -313,5 +330,80 @@ export default function TranscriptViewer({
         />
       )}
     </div>
+
+    {/* ── Expanded / focus-mode overlay ── */}
+    {expanded && (
+      <div className="fixed inset-0 z-50 flex flex-col" style={{ background: '#FAF7F2' }}>
+        {/* Toolbar */}
+        <div style={{ background: '#FFFFFF', borderBottom: '1px solid #ECE6D9', flexShrink: 0 }}>
+          <EditorBar
+            interviewId={interviewId}
+            transcriptId={transcriptId ?? ''}
+            interviewStatus={interviewStatus}
+            hasTranslation={hasTranslation}
+            showTranslation={showTranslation}
+            onToggleTranslation={() => setShowTranslation(v => !v)}
+            onTranslate={handleTranslate}
+            isTranslating={isTranslating}
+            expanded={true}
+            onCollapse={() => setExpanded(false)}
+            hideSource={hideSource}
+            onToggleHideSource={() => setHideSource(v => !v)}
+            currentTime={currentTime}
+          />
+        </div>
+
+        {/* Transcript body — document-like layout */}
+        <div className="flex-1 overflow-hidden">
+          <div className="h-full max-w-4xl mx-auto px-6 pt-3 pb-4 flex flex-col">
+            <div className="flex-1 overflow-hidden relative">
+              <SegmentList
+                segments={localSegments}
+                currentTime={currentTime}
+                onSeek={handleSeek}
+                speakerMap={speakerMap}
+                onUpdateSpeaker={handleUpdateSpeaker}
+                onTextSelect={transcriptId ? setSelectionData : undefined}
+                onEditSave={transcriptId ? handleEditSave : undefined}
+                onTranslationEdit={transcriptId ? handleTranslationEdit : undefined}
+                onHide={transcriptId ? handleHideSegment : undefined}
+                onUnhide={transcriptId ? handleUnhideSegment : undefined}
+                markers={localMarkers}
+                translationSegments={translationSegments}
+                showTranslation={showTranslation}
+                hideSource={hideSource}
+              />
+              {undoSegment && (
+                <div
+                  className="absolute bottom-4 left-0 right-0 mx-3 flex items-center gap-3 px-3 py-2.5 rounded-xl shadow-lg"
+                  style={{ background: '#1A1F2C', border: '1px solid #2D3545' }}
+                >
+                  <p className="flex-1 text-xs truncate" style={{ color: '#B5BBC4' }}>
+                    Hidden: <span style={{ color: '#FAF7F2' }}>&ldquo;{undoSegment.text}&rdquo;</span>
+                  </p>
+                  <button
+                    onClick={() => handleUnhideSegment(undoSegment.idx)}
+                    className="text-xs font-medium px-2.5 py-1 rounded-lg shrink-0"
+                    style={{ background: '#E2EEEC', color: '#0E5C5C' }}
+                  >
+                    Undo
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {selectionData && (
+          <SelectionToolbar
+            selection={selectionData}
+            onSelect={handleCreateMarker}
+            onClose={() => setSelectionData(null)}
+            saving={savingMarker}
+          />
+        )}
+      </div>
+    )}
+    </>
   )
 }
