@@ -16,7 +16,7 @@ async function translateBatch(
   client: { messages: { create: (opts: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }>; stop_reason: string }> } },
   batch: Array<{ idx: number; text: string }>,
 ): Promise<TranslationSegment[]> {
-  const prompt = `Translate these Telugu-English interview segments to English for medical research. Return ONLY a JSON array — no markdown, no explanation.
+  const prompt = `Translate these interview segments to English for medical research. Segments may be in any language (Telugu, Hindi, English, or mixed). Return ONLY a JSON array — no markdown, no explanation.
 
 Input: ${JSON.stringify(batch)}
 
