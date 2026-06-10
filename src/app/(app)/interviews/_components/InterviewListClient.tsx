@@ -23,7 +23,7 @@ const TYPE_PILL: Record<string, { label: string; bg: string; color: string }> = 
   other:    { label: 'Other',    bg: '#F5F1E9', color: '#8A929C' },
 }
 
-const LANG_LABELS: Record<string, string> = { en: 'English', te: 'Telugu', mixed: 'Mixed' }
+const LANG_LABELS: Record<string, string> = { en: 'English', te: 'Telugu', hi: 'Hindi', mixed: 'Mixed' }
 
 type Filter = 'all' | 'patients' | 'doctors' | 'survivors' | 'in_progress' | 'transcribed' | 'reviewed'
 

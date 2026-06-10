@@ -21,6 +21,7 @@ const TYPE_OPTIONS: { value: InterviewType; label: string }[] = [
 
 const LANG_OPTIONS = [
   { value: 'te' as const, label: 'Telugu' },
+  { value: 'hi' as const, label: 'Hindi' },
   { value: 'en' as const, label: 'English' },
   { value: 'mixed' as const, label: 'Mixed (code-switched)' },
 ]

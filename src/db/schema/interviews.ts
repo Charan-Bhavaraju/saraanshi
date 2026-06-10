@@ -22,6 +22,7 @@ export const interviewTypeEnum = pgEnum('interview_type', [
 export const interviewLanguageEnum = pgEnum('interview_language', [
   'en',
   'te',
+  'hi',
   'mixed',
 ])
 

@@ -9,6 +9,7 @@ const COST_PAISE_PER_SECOND = 2.5
 const LANG_MAP: Record<string, string> = {
   en: 'en-IN',
   te: 'te-IN',
+  hi: 'hi-IN',
   mixed: 'unknown',
 }
 

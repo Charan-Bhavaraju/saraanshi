@@ -15,7 +15,7 @@ import EditInterviewPanel from './_components/EditInterviewPanel'
 import ReplaceAudioPanel from './_components/ReplaceAudioPanel'
 import type { TranscriptSegment, TranslationSegment, Marker } from '@/types/database'
 
-const LANG_LABELS: Record<string, string> = { en: 'English', te: 'Telugu', mixed: 'Mixed' }
+const LANG_LABELS: Record<string, string> = { en: 'English', te: 'Telugu', hi: 'Hindi', mixed: 'Mixed' }
 
 async function getInterview(id: string) {
   const [row] = await db

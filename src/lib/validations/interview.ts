@@ -6,7 +6,7 @@ export const InterviewCreateSchema = z.object({
   participantCode: z.string().min(1).max(20).optional().nullable(),
   conductedAt: z.string().datetime().optional().nullable(),
   location: z.string().max(300).optional().nullable(),
-  language: z.enum(['en', 'te', 'mixed']).default('mixed'),
+  language: z.enum(['en', 'te', 'hi', 'mixed']).default('mixed'),
   contextNotes: z.string().max(5000).optional().nullable(),
   consentRecordedAt: z.string().datetime().optional().nullable(),
 })

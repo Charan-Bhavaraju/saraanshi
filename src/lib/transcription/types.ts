@@ -25,7 +25,7 @@ export type TranscriptionParams = {
   // Presigned GET URL to the audio file in R2.
   // Provider downloads directly — audio never passes through Vercel.
   audioUrl: string
-  language: 'en' | 'te' | 'mixed'
+  language: 'en' | 'te' | 'hi' | 'mixed'
   // Zero-data-retention mode — pass true for production to prevent provider
   // from using audio/transcripts for model training.
   // Sarvam enterprise tier supports this; default false is acceptable for dev.

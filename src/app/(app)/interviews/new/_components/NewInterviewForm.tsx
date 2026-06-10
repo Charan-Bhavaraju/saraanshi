@@ -22,6 +22,7 @@ const TYPE_OPTIONS: { value: InterviewType; label: string }[] = [
 
 const LANG_OPTIONS = [
   { value: 'te' as const, label: 'Telugu' },
+  { value: 'hi' as const, label: 'Hindi' },
   { value: 'en' as const, label: 'English' },
   { value: 'mixed' as const, label: 'Mixed (code-switched)' },
 ]
@@ -33,7 +34,7 @@ export default function NewInterviewForm({ contacts }: { contacts: ContactOption
   const [type, setType] = useState<InterviewType>('patient')
   const [contactId, setContactId] = useState('')
   const [participantCode, setParticipantCode] = useState('')
-  const [language, setLanguage] = useState<'en' | 'te' | 'mixed'>('mixed')
+  const [language, setLanguage] = useState<'en' | 'te' | 'hi' | 'mixed'>('mixed')
   const [conductedAt, setConductedAt] = useState(() => {
     const now = new Date()
     now.setMinutes(0, 0, 0)
