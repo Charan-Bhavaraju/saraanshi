@@ -21,7 +21,8 @@ const FILLER_WORDS = new Set([
   'matlab',
 ])
 
-export function isFillerSegment(text: string): boolean {
+export function isFillerSegment(text: string | null | undefined): boolean {
+  if (!text) return false
   const normalized = text
     .trim()
     .toLowerCase()
