@@ -70,12 +70,20 @@ export default function TranscriptViewer({
   const [isHidingFillers, setIsHidingFillers] = useState(false)
 
   const fillerCount = useMemo(
-    () => localSegments.filter(s => !s.hidden && isFillerSegment(s.text)).length,
-    [localSegments],
+    () => localSegments.filter((s, i) => {
+      if (s.hidden) return false
+      const en = translationSegments.find(t => t.segmentIdx === i)?.enText
+      return isFillerSegment(en ?? s.text)
+    }).length,
+    [localSegments, translationSegments],
   )
   const hiddenFillerCount = useMemo(
-    () => localSegments.filter(s => s.hidden && isFillerSegment(s.text)).length,
-    [localSegments],
+    () => localSegments.filter((s, i) => {
+      if (!s.hidden) return false
+      const en = translationSegments.find(t => t.segmentIdx === i)?.enText
+      return isFillerSegment(en ?? s.text)
+    }).length,
+    [localSegments, translationSegments],
   )
 
   useEffect(() => {
@@ -172,7 +180,11 @@ export default function TranscriptViewer({
     const hiding = fillerCount > 0
     const indices = localSegments
       .map((s, i) => ({ s, i }))
-      .filter(({ s }) => hiding ? (!s.hidden && isFillerSegment(s.text)) : (s.hidden && isFillerSegment(s.text)))
+      .filter(({ s, i }) => {
+        const en = translationSegments.find(t => t.segmentIdx === i)?.enText
+        const isFiller = isFillerSegment(en ?? s.text)
+        return hiding ? (!s.hidden && isFiller) : (s.hidden && isFiller)
+      })
       .map(({ i }) => i)
     if (indices.length === 0) return
     setIsHidingFillers(true)
@@ -277,6 +289,8 @@ export default function TranscriptViewer({
             onToggleTranslation={() => setShowTranslation(v => !v)}
             onTranslate={handleTranslate}
             isTranslating={isTranslating}
+            hideSource={hideSource}
+            onToggleHideSource={() => setHideSource(v => !v)}
             fillerCount={fillerCount}
             hiddenFillerCount={hiddenFillerCount}
             onHideFillers={handleToggleFillers}

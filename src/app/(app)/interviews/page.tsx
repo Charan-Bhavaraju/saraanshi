@@ -6,6 +6,7 @@ import { isNull, desc, inArray } from 'drizzle-orm'
 import Link from 'next/link'
 import type { InterviewWithContact } from '@/types/database'
 import InterviewListClient from './_components/InterviewListClient'
+import BulkExportButton from './_components/BulkExportButton'
 
 // Bust immediately via revalidatePath('/interviews') in server actions; 30s TTL as safety-net
 export const revalidate = 30
@@ -63,16 +64,21 @@ export default async function InterviewsPage() {
               : `${stats.transcribed} transcribed · ${stats.inProgress > 0 ? `${stats.inProgress} in progress · ` : ''}${stats.total} total`}
           </p>
         </div>
-        <Link
-          href="/interviews/new"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
-          style={{ background: '#0E5C5C', color: '#FFFFFF', border: '1px solid #0E5C5C' }}
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          </svg>
-          New interview
-        </Link>
+        <div className="flex items-center gap-2">
+          {stats.transcribed > 0 && (
+            <BulkExportButton hasAnyTranslation={stats.transcribed > 0} />
+          )}
+          <Link
+            href="/interviews/new"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all"
+            style={{ background: '#0E5C5C', color: '#FFFFFF', border: '1px solid #0E5C5C' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+            New interview
+          </Link>
+        </div>
       </div>
 
       {allInterviews.length === 0 ? (
