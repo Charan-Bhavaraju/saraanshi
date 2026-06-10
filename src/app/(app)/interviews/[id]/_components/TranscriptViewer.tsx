@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import SegmentList from './SegmentList'
 import MarkersList from './MarkersList'
@@ -13,8 +13,10 @@ import {
   updateMarkerNote,
   saveSegmentEdit,
   hideSegment,
+  setSegmentsHiddenBulk,
   saveTranslation,
 } from '@/app/(app)/interviews/actions'
+import { isFillerSegment } from '@/lib/fillers'
 import type {
   TranscriptSegment,
   TranslationSegment,
@@ -65,6 +67,16 @@ export default function TranscriptViewer({
 
   const [expanded, setExpanded] = useState(false)
   const [hideSource, setHideSource] = useState(false)
+  const [isHidingFillers, setIsHidingFillers] = useState(false)
+
+  const fillerCount = useMemo(
+    () => localSegments.filter(s => !s.hidden && isFillerSegment(s.text)).length,
+    [localSegments],
+  )
+  const hiddenFillerCount = useMemo(
+    () => localSegments.filter(s => s.hidden && isFillerSegment(s.text)).length,
+    [localSegments],
+  )
 
   useEffect(() => {
     if (!expanded) return
@@ -153,6 +165,27 @@ export default function TranscriptViewer({
       setLocalSegments(prev => prev.map((s, i) => i === segmentIdx ? { ...s, hidden: true } : s))
     }
   }, [interviewId, transcriptId])
+
+  const handleToggleFillers = useCallback(async () => {
+    if (!transcriptId) return
+    // If any fillers are visible → hide all. If all are hidden → show all.
+    const hiding = fillerCount > 0
+    const indices = localSegments
+      .map((s, i) => ({ s, i }))
+      .filter(({ s }) => hiding ? (!s.hidden && isFillerSegment(s.text)) : (s.hidden && isFillerSegment(s.text)))
+      .map(({ i }) => i)
+    if (indices.length === 0) return
+    setIsHidingFillers(true)
+    setLocalSegments(prev => prev.map((s, i) => indices.includes(i) ? { ...s, hidden: hiding } : s))
+    try {
+      await setSegmentsHiddenBulk(interviewId, transcriptId, indices, hiding)
+    } catch (e) {
+      console.error('toggleFillers failed', e)
+      setLocalSegments(prev => prev.map((s, i) => indices.includes(i) ? { ...s, hidden: !hiding } : s))
+    } finally {
+      setIsHidingFillers(false)
+    }
+  }, [interviewId, transcriptId, localSegments, fillerCount])
 
   const handleCreateMarker = useCallback(async (type: MarkerType) => {
     if (!selectionData || !transcriptId) return
@@ -244,6 +277,10 @@ export default function TranscriptViewer({
             onToggleTranslation={() => setShowTranslation(v => !v)}
             onTranslate={handleTranslate}
             isTranslating={isTranslating}
+            fillerCount={fillerCount}
+            hiddenFillerCount={hiddenFillerCount}
+            onHideFillers={handleToggleFillers}
+            isHidingFillers={isHidingFillers}
             onExpand={() => setExpanded(true)}
           />
         )}
@@ -345,6 +382,10 @@ export default function TranscriptViewer({
             onToggleTranslation={() => setShowTranslation(v => !v)}
             onTranslate={handleTranslate}
             isTranslating={isTranslating}
+            fillerCount={fillerCount}
+            hiddenFillerCount={hiddenFillerCount}
+            onHideFillers={handleToggleFillers}
+            isHidingFillers={isHidingFillers}
             expanded={true}
             onCollapse={() => setExpanded(false)}
             hideSource={hideSource}

@@ -15,6 +15,10 @@ type Props = {
   onToggleTranslation: () => void
   onTranslate: () => void
   isTranslating: boolean
+  fillerCount?: number
+  hiddenFillerCount?: number
+  onHideFillers?: () => void
+  isHidingFillers?: boolean
   onExpand?: () => void
   expanded?: boolean
   onCollapse?: () => void
@@ -38,6 +42,10 @@ export default function EditorBar({
   onToggleTranslation,
   onTranslate,
   isTranslating,
+  fillerCount = 0,
+  hiddenFillerCount = 0,
+  onHideFillers,
+  isHidingFillers = false,
   onExpand,
   expanded,
   onCollapse,
@@ -105,6 +113,38 @@ export default function EditorBar({
             )}
           </svg>
           {hideSource ? 'EN only' : 'Source'}
+        </button>
+      )}
+
+      {/* Hide / show fillers toggle */}
+      {(fillerCount > 0 || hiddenFillerCount > 0) && onHideFillers && (
+        <button
+          onClick={onHideFillers}
+          disabled={isHidingFillers}
+          title={fillerCount > 0 ? `Hide ${fillerCount} filler segment${fillerCount === 1 ? '' : 's'} (hmm, okay, uh, haan, acha…)` : `Restore ${hiddenFillerCount} hidden filler segment${hiddenFillerCount === 1 ? '' : 's'}`}
+          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-60"
+          style={{
+            border: `1px solid ${hiddenFillerCount > 0 && fillerCount === 0 ? '#0E5C5C' : '#ECE6D9'}`,
+            background: hiddenFillerCount > 0 && fillerCount === 0 ? '#E2EEEC' : '#FFFFFF',
+            color: hiddenFillerCount > 0 && fillerCount === 0 ? '#0E5C5C' : '#4A5263',
+          }}
+        >
+          {isHidingFillers ? (
+            <>
+              <svg className="animate-spin" width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <circle cx="6" cy="6" r="4" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2" />
+                <path d="M6 2a4 4 0 0 1 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              {fillerCount > 0 ? 'Hiding…' : 'Restoring…'}
+            </>
+          ) : (
+            <>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 4h8M3 4V2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5V4M4.5 6v3M7.5 6v3M1.5 4l.7 5.6A1 1 0 0 0 3.2 10h5.6a1 1 0 0 0 1-.8L10.5 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              {fillerCount > 0 ? `Fillers (${fillerCount})` : 'Fillers hidden'}
+            </>
+          )}
         </button>
       )}
 
