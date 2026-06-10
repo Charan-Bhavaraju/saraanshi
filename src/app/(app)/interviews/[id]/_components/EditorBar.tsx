@@ -90,16 +90,16 @@ export default function EditorBar({
         EN
       </button>
 
-      {/* Source toggle — hide/show original column when translation visible */}
+      {/* Source toggle — active (teal) = original visible, inactive = hidden */}
       {hasTranslation && showTranslation && (
         <button
           onClick={onToggleHideSource}
-          title={hideSource ? 'Show original text alongside translation' : 'Hide original — show English only'}
+          title={hideSource ? 'Show original text' : 'Hide original text'}
           className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition-all"
           style={{
-            border: `1px solid ${hideSource ? '#B8842A' : '#ECE6D9'}`,
-            background: hideSource ? '#FFF3E0' : '#FFFFFF',
-            color: hideSource ? '#B8842A' : '#4A5263',
+            border: `1px solid ${!hideSource ? '#0E5C5C' : '#ECE6D9'}`,
+            background: !hideSource ? '#E2EEEC' : '#FFFFFF',
+            color: !hideSource ? '#0E5C5C' : '#4A5263',
           }}
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -112,17 +112,23 @@ export default function EditorBar({
               <path d="M1 6s2-4 5-4 5 4 5 4-2 4-5 4-5-4-5-4zM6 4.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3z" stroke="currentColor" strokeWidth="1.2" />
             )}
           </svg>
-          {hideSource ? 'EN only' : 'Source'}
+          Source
         </button>
       )}
 
-      {/* Hide / show fillers toggle */}
-      {(fillerCount > 0 || hiddenFillerCount > 0) && onHideFillers && (
+      {/* Hide / show fillers toggle — always visible for transcribed interviews */}
+      {onHideFillers && (
         <button
           onClick={onHideFillers}
-          disabled={isHidingFillers}
-          title={fillerCount > 0 ? `Hide ${fillerCount} filler segment${fillerCount === 1 ? '' : 's'} (hmm, okay, uh, haan, acha…)` : `Restore ${hiddenFillerCount} hidden filler segment${hiddenFillerCount === 1 ? '' : 's'}`}
-          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-60"
+          disabled={isHidingFillers || (fillerCount === 0 && hiddenFillerCount === 0)}
+          title={
+            fillerCount > 0
+              ? `Hide ${fillerCount} filler segment${fillerCount === 1 ? '' : 's'} (hmm, okay, uh, haan, acha…)`
+              : hiddenFillerCount > 0
+                ? `Restore ${hiddenFillerCount} hidden filler segment${hiddenFillerCount === 1 ? '' : 's'}`
+                : 'No filler segments detected'
+          }
+          className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-40"
           style={{
             border: `1px solid ${hiddenFillerCount > 0 && fillerCount === 0 ? '#0E5C5C' : '#ECE6D9'}`,
             background: hiddenFillerCount > 0 && fillerCount === 0 ? '#E2EEEC' : '#FFFFFF',
@@ -142,7 +148,7 @@ export default function EditorBar({
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                 <path d="M2 4h8M3 4V2.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 .5.5V4M4.5 6v3M7.5 6v3M1.5 4l.7 5.6A1 1 0 0 0 3.2 10h5.6a1 1 0 0 0 1-.8L10.5 4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {fillerCount > 0 ? `Fillers (${fillerCount})` : 'Fillers hidden'}
+              {fillerCount > 0 ? `Fillers (${fillerCount})` : hiddenFillerCount > 0 ? 'Fillers hidden' : 'Fillers (0)'}
             </>
           )}
         </button>

@@ -173,13 +173,13 @@ function SegmentRow({
 }) {
   const [hovering, setHovering] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [editValue, setEditValue] = useState(seg.text)
+  const [editValue, setEditValue] = useState(seg.text ?? '')
   const [editingEn, setEditingEn] = useState(false)
   const [enValue, setEnValue] = useState(translation?.enText ?? '')
   const textRef = useRef<HTMLParagraphElement>(null)
 
   // Sync values when props change
-  useEffect(() => { if (!editing) setEditValue(seg.text) }, [seg.text, editing])
+  useEffect(() => { if (!editing) setEditValue(seg.text ?? '') }, [seg.text, editing])
   useEffect(() => { if (!editingEn) setEnValue(translation?.enText ?? '') }, [translation?.enText, editingEn])
 
   function handleMouseUp(e: React.MouseEvent) {
@@ -208,7 +208,7 @@ function SegmentRow({
     if (trimmed && trimmed !== seg.text) {
       onEditSave?.(idx, trimmed)
     } else {
-      setEditValue(seg.text)
+      setEditValue(seg.text ?? '')
     }
   }
 
@@ -371,7 +371,7 @@ function SegmentRow({
                 value={editValue}
                 onChange={e => setEditValue(e.target.value)}
                 onBlur={commitEdit}
-                onKeyDown={e => { if (e.key === 'Escape') { setEditing(false); setEditValue(seg.text) } }}
+                onKeyDown={e => { if (e.key === 'Escape') { setEditing(false); setEditValue(seg.text ?? '') } }}
                 autoFocus
                 rows={Math.max(2, editValue.split('\n').length)}
                 className="w-full resize-none outline-none"
@@ -436,7 +436,7 @@ function SegmentRow({
             value={editValue}
             onChange={e => setEditValue(e.target.value)}
             onBlur={commitEdit}
-            onKeyDown={e => { if (e.key === 'Escape') { setEditing(false); setEditValue(seg.text) } }}
+            onKeyDown={e => { if (e.key === 'Escape') { setEditing(false); setEditValue(seg.text ?? '') } }}
             autoFocus
             rows={Math.max(2, editValue.split('\n').length)}
             className="w-full rounded-lg px-2 py-1.5 resize-none"
@@ -490,7 +490,7 @@ export default function SegmentList({
     (translationSegments ?? []).map(t => [t.segmentIdx, t])
   )
 
-  const wordCount = visibleSegments.reduce((acc, s) => acc + s.text.split(/\s+/).filter(Boolean).length, 0)
+  const wordCount = visibleSegments.reduce((acc, s) => acc + (s.text ?? '').split(/\s+/).filter(Boolean).length, 0)
 
   if (segments.length === 0) {
     return (
