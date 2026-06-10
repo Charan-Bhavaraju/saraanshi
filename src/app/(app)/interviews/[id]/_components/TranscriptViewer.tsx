@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import dynamic from 'next/dynamic'
+import type { WsHandle } from './AudioPlayer'
 import SegmentList from './SegmentList'
 import MarkersList from './MarkersList'
 import EditorBar from './EditorBar'
@@ -68,6 +69,12 @@ export default function TranscriptViewer({
   const [expanded, setExpanded] = useState(false)
   const [hideSource, setHideSource] = useState(false)
   const [isHidingFillers, setIsHidingFillers] = useState(false)
+
+  // Shared audio state for focus mode compact player
+  const wsHandleRef = useRef<WsHandle | null>(null)
+  const [audioIsPlaying, setAudioIsPlaying] = useState(false)
+  const [audioDuration, setAudioDuration] = useState(0)
+  const [audioSpeedIdx, setAudioSpeedIdx] = useState(0)
 
   const fillerCount = useMemo(
     () => localSegments.filter((s, i) => {
@@ -270,6 +277,10 @@ export default function TranscriptViewer({
           onTimeUpdate={setCurrentTime}
           seekTo={seekTo}
           seekCounter={seekCounter}
+          wsHandleRef={wsHandleRef}
+          onPlayStateChange={setAudioIsPlaying}
+          onDurationReady={setAudioDuration}
+          onSpeedChange={setAudioSpeedIdx}
         />
       </div>
 
@@ -457,8 +468,151 @@ export default function TranscriptViewer({
             saving={savingMarker}
           />
         )}
+
+        {/* Compact audio bar */}
+        <FocusAudioBar
+          wsHandleRef={wsHandleRef}
+          currentTime={currentTime}
+          duration={audioDuration}
+          isPlaying={audioIsPlaying}
+          speedIdx={audioSpeedIdx}
+          onSpeedChange={setAudioSpeedIdx}
+          onSeek={handleSeek}
+        />
       </div>
     )}
     </>
+  )
+}
+
+const SPEEDS = [1, 1.25, 1.5, 2] as const
+
+function formatAudioTime(s: number) {
+  const m = Math.floor(s / 60)
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+}
+
+function FocusAudioBar({
+  wsHandleRef,
+  currentTime,
+  duration,
+  isPlaying,
+  speedIdx,
+  onSpeedChange,
+  onSeek,
+}: {
+  wsHandleRef: React.MutableRefObject<WsHandle | null>
+  currentTime: number
+  duration: number
+  isPlaying: boolean
+  speedIdx: number
+  onSpeedChange: (i: number) => void
+  onSeek: (t: number) => void
+}) {
+  function togglePlay() { wsHandleRef.current?.playPause() }
+
+  function skip(s: number) {
+    const t = Math.max(0, Math.min(currentTime + s, duration))
+    wsHandleRef.current?.setTime(t)
+    onSeek(t)
+  }
+
+  function cycleSpeed() {
+    const next = (speedIdx + 1) % SPEEDS.length
+    wsHandleRef.current?.setPlaybackRate(SPEEDS[next])
+    onSpeedChange(next)
+  }
+
+  function handleBarClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (!wsHandleRef.current || duration === 0) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const fraction = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    wsHandleRef.current.seekTo(fraction)
+    onSeek(fraction * duration)
+  }
+
+  const progress = duration > 0 ? currentTime / duration : 0
+
+  return (
+    <div
+      className="flex items-center gap-3 px-6 py-3 shrink-0"
+      style={{ background: '#FFFFFF', borderTop: '1px solid #ECE6D9' }}
+    >
+      {/* Back 5s */}
+      <button
+        onClick={() => skip(-5)}
+        className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+        style={{ border: '1px solid #ECE6D9', background: '#FFFFFF', color: '#4A5263', fontFamily: 'var(--font-mono)' }}
+        title="Back 5s (←)"
+      >
+        −5s
+      </button>
+
+      {/* Play / Pause */}
+      <button
+        onClick={togglePlay}
+        className="flex items-center justify-center rounded-full shrink-0 transition-all"
+        style={{ width: 36, height: 36, background: '#1A1F2C', color: '#FAF7F2', border: 'none' }}
+        title="Play / Pause (Space)"
+      >
+        {isPlaying ? (
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <rect x="3" y="2" width="4" height="12" rx="1" />
+            <rect x="9" y="2" width="4" height="12" rx="1" />
+          </svg>
+        ) : (
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M4 2.5l10 5.5-10 5.5V2.5z" />
+          </svg>
+        )}
+      </button>
+
+      {/* Forward 5s */}
+      <button
+        onClick={() => skip(5)}
+        className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all"
+        style={{ border: '1px solid #ECE6D9', background: '#FFFFFF', color: '#4A5263', fontFamily: 'var(--font-mono)' }}
+        title="Forward 5s (→)"
+      >
+        +5s
+      </button>
+
+      {/* Progress bar */}
+      <div
+        className="flex-1 h-1.5 rounded-full cursor-pointer relative overflow-hidden"
+        style={{ background: '#F5F1E9', minWidth: 0 }}
+        onClick={handleBarClick}
+        title="Click to seek"
+      >
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${progress * 100}%`, background: '#0E5C5C', transition: 'width 0.1s linear' }}
+        />
+      </div>
+
+      {/* Time */}
+      <span
+        className="shrink-0 text-xs tabular-nums"
+        style={{ fontFamily: 'var(--font-mono)', color: '#8A929C', fontSize: 11 }}
+      >
+        {formatAudioTime(currentTime)} / {formatAudioTime(duration)}
+      </span>
+
+      {/* Speed */}
+      <button
+        onClick={cycleSpeed}
+        className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all shrink-0"
+        style={{
+          border: `1px solid ${speedIdx > 0 ? '#B2D8D4' : '#ECE6D9'}`,
+          background: speedIdx > 0 ? '#E2EEEC' : '#FFFFFF',
+          color: speedIdx > 0 ? '#0E5C5C' : '#4A5263',
+          fontFamily: 'var(--font-mono)',
+          minWidth: 48,
+        }}
+        title="Change speed"
+      >
+        {SPEEDS[speedIdx]}× ▾
+      </button>
+    </div>
   )
 }

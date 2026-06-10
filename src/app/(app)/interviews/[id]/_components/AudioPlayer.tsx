@@ -3,11 +3,23 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import WaveSurfer from 'wavesurfer.js'
 
+// Minimal WaveSurfer surface exposed to the parent
+export type WsHandle = {
+  playPause: () => void
+  setTime: (t: number) => void
+  seekTo: (fraction: number) => void
+  setPlaybackRate: (r: number) => void
+}
+
 type Props = {
   audioUrl: string
   onTimeUpdate?: (currentTime: number) => void
-  seekTo?: number   // time in seconds to seek to
-  seekCounter?: number // increment to re-seek even if seekTo value is the same
+  seekTo?: number
+  seekCounter?: number
+  wsHandleRef?: React.MutableRefObject<WsHandle | null>
+  onPlayStateChange?: (playing: boolean) => void
+  onDurationReady?: (dur: number) => void
+  onSpeedChange?: (speedIdx: number) => void
 }
 
 const SPEEDS = [1, 1.25, 1.5, 2] as const
@@ -18,7 +30,7 @@ function formatTime(s: number) {
   return `${m}:${String(sec).padStart(2, '0')}`
 }
 
-export default function AudioPlayer({ audioUrl, onTimeUpdate, seekTo, seekCounter }: Props) {
+export default function AudioPlayer({ audioUrl, onTimeUpdate, seekTo, seekCounter, wsHandleRef, onPlayStateChange, onDurationReady, onSpeedChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const wsRef = useRef<WaveSurfer | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -49,6 +61,7 @@ export default function AudioPlayer({ audioUrl, onTimeUpdate, seekTo, seekCounte
     ws.on('ready', (dur) => {
       setDuration(dur)
       setIsReady(true)
+      onDurationReady?.(dur)
     })
 
     ws.on('audioprocess', (t) => {
@@ -61,14 +74,26 @@ export default function AudioPlayer({ audioUrl, onTimeUpdate, seekTo, seekCounte
       onTimeUpdate?.(t)
     })
 
-    ws.on('finish', () => setIsPlaying(false))
+    ws.on('finish', () => { setIsPlaying(false); onPlayStateChange?.(false) })
     ws.on('error', () => setLoadError(true))
-    ws.on('play', () => setIsPlaying(true))
-    ws.on('pause', () => setIsPlaying(false))
+    ws.on('play', () => { setIsPlaying(true); onPlayStateChange?.(true) })
+    ws.on('pause', () => { setIsPlaying(false); onPlayStateChange?.(false) })
 
     wsRef.current = ws
+    if (wsHandleRef) {
+      wsHandleRef.current = {
+        playPause: () => ws.playPause(),
+        setTime: (t) => ws.setTime(t),
+        seekTo: (f) => ws.seekTo(f),
+        setPlaybackRate: (r) => ws.setPlaybackRate(r),
+      }
+    }
 
-    return () => { ws.destroy(); wsRef.current = null }
+    return () => {
+      ws.destroy()
+      wsRef.current = null
+      if (wsHandleRef) wsHandleRef.current = null
+    }
   }, [audioUrl]) // re-init if URL changes (presign refresh)
 
   // Seek from external (segment click). seekCounter as dep so clicking
@@ -92,6 +117,7 @@ export default function AudioPlayer({ audioUrl, onTimeUpdate, seekTo, seekCounte
     const next = (speedIdx + 1) % SPEEDS.length
     setSpeedIdx(next)
     wsRef.current?.setPlaybackRate(SPEEDS[next])
+    onSpeedChange?.(next)
   }
 
   // Keyboard shortcuts: Space, ←, →
