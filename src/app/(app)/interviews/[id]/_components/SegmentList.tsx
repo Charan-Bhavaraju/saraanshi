@@ -177,6 +177,11 @@ function SegmentRow({
   const [editingEn, setEditingEn] = useState(false)
   const [enValue, setEnValue] = useState(translation?.enText ?? '')
   const textRef = useRef<HTMLParagraphElement>(null)
+  // Records whether any edit mode was active at mousedown time.
+  // blur fires before click, so by the time handleRowClick runs, editing is already false.
+  // We capture the value at mousedown to suppress the unintended seek when a click
+  // is blurring the textarea to commit an edit.
+  const wasEditingOnMouseDown = useRef(false)
 
   // Sync values when props change
   useEffect(() => { if (!editing) setEditValue(seg.text ?? '') }, [seg.text, editing])
@@ -193,6 +198,11 @@ function SegmentRow({
   }
 
   function handleRowClick(e: React.MouseEvent) {
+    // Suppress seek when this click was intended to commit/dismiss an edit
+    if (wasEditingOnMouseDown.current) {
+      wasEditingOnMouseDown.current = false
+      return
+    }
     // Don't seek if clicking on interactive elements (buttons, inputs, speaker chip area)
     const target = e.target as HTMLElement
     if (target.closest('button') || target.closest('input') || target.closest('textarea')) return
@@ -225,6 +235,7 @@ function SegmentRow({
         cursor: editing ? 'default' : 'pointer',
         opacity: seg.hidden ? 0.55 : 1,
       }}
+      onMouseDown={() => { wasEditingOnMouseDown.current = editing || editingEn }}
       onClick={seg.hidden ? undefined : handleRowClick}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
@@ -325,7 +336,7 @@ function SegmentRow({
           <div
             className="rounded-lg px-3 py-2 mt-0.5 group/en"
             style={{ background: '#F0F7F7', borderLeft: '2px solid #0E5C5C40', cursor: editingEn ? 'default' : 'text' }}
-            onClick={() => { if (!editingEn && onTranslationEdit) setEditingEn(true) }}
+            onClick={(e) => { e.stopPropagation(); if (!editingEn && onTranslationEdit) setEditingEn(true) }}
           >
             {editingEn ? (
               <textarea
@@ -391,7 +402,7 @@ function SegmentRow({
           <div
             className="rounded-lg px-2.5 py-2 group/en"
             style={{ background: '#F0F7F7', borderLeft: '2px solid #0E5C5C40', cursor: editingEn ? 'default' : 'text' }}
-            onClick={() => { if (!editingEn && onTranslationEdit) setEditingEn(true) }}
+            onClick={(e) => { e.stopPropagation(); if (!editingEn && onTranslationEdit) setEditingEn(true) }}
           >
             {editingEn ? (
               <textarea
