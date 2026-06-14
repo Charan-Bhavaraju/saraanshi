@@ -13,6 +13,10 @@ import RealtimeStatusWatcher from './_components/RealtimeStatusWatcher'
 import TranscribingPoller from './_components/TranscribingPoller'
 import EditInterviewPanel from './_components/EditInterviewPanel'
 import ReplaceAudioPanel from './_components/ReplaceAudioPanel'
+import DetailTabs from './_components/DetailTabs'
+import { getInsights } from './insights/actions'
+import { estimateInsightsPaise } from '@/lib/ai/cost'
+import { MODELS } from '@/lib/ai/anthropic'
 import type { TranscriptSegment, TranslationSegment, Marker } from '@/types/database'
 
 const LANG_LABELS: Record<string, string> = { en: 'English', te: 'Telugu', hi: 'Hindi', mixed: 'Mixed' }
@@ -120,6 +124,13 @@ export default async function InterviewDetailPage({
   const showTranscribeButton = interview.status === 'uploaded'
   const showTranscribing = interview.status === 'transcribing'
   const showViewer = ['transcribed', 'reviewed', 'analyzed'].includes(interview.status) && audioUrl && segments.length > 0
+
+  // Insights (Layer 1) become available once the interview is reviewed.
+  const insightsEnabled = ['reviewed', 'analyzed'].includes(interview.status) && segments.length > 0
+  const insightsData = insightsEnabled ? await getInsights(id) : null
+  const insightsChars = segments.reduce((n, s) => n + (s.hidden ? 0 : s.text.length), 0)
+  const estimatedPaise = estimateInsightsPaise(MODELS.haiku, Math.ceil(insightsChars / 4) + 600)
+  const hasTranslation = translationSegments.length > 0
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 pb-20">
@@ -282,17 +293,28 @@ export default async function InterviewDetailPage({
         </>
       )}
 
-      {/* Transcript viewer */}
+      {/* Transcript viewer + Insights tab */}
       {showViewer && audioUrl && (
-        <TranscriptViewer
-          interviewId={id}
-          audioUrl={audioUrl}
-          segments={segments}
-          initialSpeakerMap={speakerMap}
-          transcriptId={transcript?.id}
-          initialMarkers={interviewMarkers}
-          initialTranslationSegments={translationSegments}
-          interviewStatus={interview.status}
+        <DetailTabs
+          insightsEnabled={insightsEnabled}
+          insightsProps={{
+            interviewId: id,
+            hasTranslation,
+            estimatedPaise,
+            initial: insightsData ?? { reflection: null, focusPoints: [] },
+          }}
+          transcript={
+            <TranscriptViewer
+              interviewId={id}
+              audioUrl={audioUrl}
+              segments={segments}
+              initialSpeakerMap={speakerMap}
+              transcriptId={transcript?.id}
+              initialMarkers={interviewMarkers}
+              initialTranslationSegments={translationSegments}
+              interviewStatus={interview.status}
+            />
+          }
         />
       )}
 

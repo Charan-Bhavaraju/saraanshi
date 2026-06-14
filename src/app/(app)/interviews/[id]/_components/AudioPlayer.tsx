@@ -120,6 +120,20 @@ export default function AudioPlayer({ audioUrl, onTimeUpdate, seekTo, seekCounte
     onSpeedChange?.(next)
   }
 
+  // Cross-tab seek: the Insights tab dispatches `saaranshi:seek` with a timestamp
+  // (in seconds). Reads wsRef directly so it's stable with an empty deps array.
+  useEffect(() => {
+    function onSeek(e: Event) {
+      const detail = (e as CustomEvent<{ seconds: number }>).detail
+      const ws = wsRef.current
+      if (!ws || typeof detail?.seconds !== 'number') return
+      const dur = ws.getDuration()
+      if (dur > 0) ws.seekTo(Math.min(Math.max(detail.seconds, 0), dur) / dur)
+    }
+    window.addEventListener('saaranshi:seek', onSeek as EventListener)
+    return () => window.removeEventListener('saaranshi:seek', onSeek as EventListener)
+  }, [])
+
   // Keyboard shortcuts: Space, ←, →
   // Uses refs so the handler is stable — deps array left empty intentionally.
   useEffect(() => {

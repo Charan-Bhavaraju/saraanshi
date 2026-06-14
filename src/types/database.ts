@@ -31,6 +31,30 @@ export type {
   MarkerType,
 } from '@/db/schema/markers'
 
+export type {
+  Confidence,
+  ReflectionSource,
+  ThemeCreatedBy,
+  NotableMoment,
+  ChatSource,
+  ChatMessage,
+  InterviewReflection,
+  InterviewReflectionInsert,
+  FocusPoint,
+  FocusPointInsert,
+  Theme,
+  ThemeInsert,
+  ThemeCode,
+  ThemeCodeInsert,
+  TranscriptChunk,
+  TranscriptChunkInsert,
+  AnalysisSession,
+  AnalysisSessionInsert,
+  ThemeSuggestion,
+  ThemeSuggestionInsert,
+  ClusterWatermark,
+} from '@/db/schema/analysis'
+
 // Task with its linked contact populated (for display)
 export type TaskWithContact = import('@/db/schema/tasks').Task & {
   contact: Pick<

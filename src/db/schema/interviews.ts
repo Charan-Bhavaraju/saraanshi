@@ -52,6 +52,9 @@ export const interviews = pgTable('interviews', {
   consentRecordedAt: timestamp('consent_recorded_at', { withTimezone: true }),
   contextNotes: text('context_notes'),
   metadata: jsonb('metadata'),
+  // Layer 3 RAG re-index trigger: hash of segment texts at last chunking run.
+  chunkSourceHash: text('chunk_source_hash'),
+  lastChunkedAt: timestamp('last_chunked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
 })
@@ -79,13 +82,17 @@ export const usageLog = pgTable('usage_log', {
   interviewId: uuid('interview_id').references(() => interviews.id),
   // 'sarvam' | 'anthropic'
   provider: text('provider').notNull(),
-  // 'transcription' | 'translation' | 'analysis'
+  // 'transcription' | 'translation' | 'insights' | 'embedding' | 'theme_naming' | 'rag_chat' | 'findings_draft'
   operation: text('operation').notNull(),
   audioSeconds: integer('audio_seconds'),
   // Cost in paise (1/100 INR) — integer avoids floating-point issues
   costInrPaise: integer('cost_inr_paise'),
   // Provider's own request ID — checked before enqueuing to prevent double-billing
   requestId: text('request_id'),
+  // Phase 4: token accounting for Claude/Gemini calls
+  model: text('model'),
+  inputTokens: integer('input_tokens'),
+  outputTokens: integer('output_tokens'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
