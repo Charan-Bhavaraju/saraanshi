@@ -177,6 +177,14 @@ function SegmentRow({
   const [editingEn, setEditingEn] = useState(false)
   const [enValue, setEnValue] = useState(translation?.enText ?? '')
   const textRef = useRef<HTMLParagraphElement>(null)
+
+  // Auto-expand a textarea to fit its content (no scrollbar, no fixed row count).
+  function sizeTextarea(el: HTMLTextAreaElement | null) {
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+  }
+
   // Records whether any edit mode was active at mousedown time.
   // blur fires before click, so by the time handleRowClick runs, editing is already false.
   // We capture the value at mousedown to suppress the unintended seek when a click
@@ -349,9 +357,10 @@ function SegmentRow({
                 }}
                 onKeyDown={e => { if (e.key === 'Escape') { setEditingEn(false); setEnValue(translation?.enText ?? '') } }}
                 autoFocus
-                rows={Math.max(2, enValue.split('\n').length)}
+                ref={el => sizeTextarea(el)}
+                onInput={e => sizeTextarea(e.currentTarget)}
                 className="w-full resize-none outline-none"
-                style={{ fontSize: 14, lineHeight: 1.7, color: '#1A1F2C', background: 'transparent' }}
+                style={{ fontSize: 14, lineHeight: 1.7, color: '#1A1F2C', background: 'transparent', minHeight: '2.5em', overflow: 'hidden' }}
               />
             ) : (
               <div className="relative">
@@ -384,9 +393,10 @@ function SegmentRow({
                 onBlur={commitEdit}
                 onKeyDown={e => { if (e.key === 'Escape') { setEditing(false); setEditValue(seg.text ?? '') } }}
                 autoFocus
-                rows={Math.max(2, editValue.split('\n').length)}
+                ref={el => sizeTextarea(el)}
+                onInput={e => sizeTextarea(e.currentTarget)}
                 className="w-full resize-none outline-none"
-                style={{ fontFamily: "'Noto Sans Telugu','Noto Sans',var(--font-sans),sans-serif", fontSize: 13, lineHeight: 1.6, color: '#1A1F2C', background: 'transparent' }}
+                style={{ fontFamily: "'Noto Sans Telugu','Noto Sans',var(--font-sans),sans-serif", fontSize: 13, lineHeight: 1.6, color: '#1A1F2C', background: 'transparent', minHeight: '2.5em', overflow: 'hidden' }}
               />
             ) : (
               <p
@@ -415,9 +425,10 @@ function SegmentRow({
                 }}
                 onKeyDown={e => { if (e.key === 'Escape') { setEditingEn(false); setEnValue(translation?.enText ?? '') } }}
                 autoFocus
-                rows={Math.max(2, enValue.split('\n').length)}
+                ref={el => sizeTextarea(el)}
+                onInput={e => sizeTextarea(e.currentTarget)}
                 className="w-full resize-none outline-none"
-                style={{ fontSize: 13, lineHeight: 1.6, color: '#1A1F2C', background: 'transparent' }}
+                style={{ fontSize: 13, lineHeight: 1.6, color: '#1A1F2C', background: 'transparent', minHeight: '2.5em', overflow: 'hidden' }}
               />
             ) : (
               <div className="relative">
@@ -449,9 +460,10 @@ function SegmentRow({
             onBlur={commitEdit}
             onKeyDown={e => { if (e.key === 'Escape') { setEditing(false); setEditValue(seg.text ?? '') } }}
             autoFocus
-            rows={Math.max(2, editValue.split('\n').length)}
+            ref={el => sizeTextarea(el)}
+            onInput={e => sizeTextarea(e.currentTarget)}
             className="w-full rounded-lg px-2 py-1.5 resize-none"
-            style={{ fontFamily: "'Noto Sans Telugu','Noto Sans',var(--font-sans),sans-serif", fontSize: 14, lineHeight: 1.65, color: '#1A1F2C', background: '#FFF8E8', border: '1px solid #B8842A', outline: 'none' }}
+            style={{ fontFamily: "'Noto Sans Telugu','Noto Sans',var(--font-sans),sans-serif", fontSize: 14, lineHeight: 1.65, color: '#1A1F2C', background: '#FFF8E8', border: '1px solid #B8842A', outline: 'none', minHeight: '2.5em', overflow: 'hidden' }}
           />
         ) : (
           <p
