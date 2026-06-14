@@ -10,6 +10,7 @@ const TABS = [
   { href: '/contacts', label: 'Contacts' },
   { href: '/interviews', label: 'Interviews' },
   { href: '/tasks', label: 'Tasks' },
+  { href: '/analysis', label: 'Analysis' },
 ] as const
 
 export default function AppHeader({
