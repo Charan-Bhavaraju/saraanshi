@@ -6,7 +6,7 @@ import { InterviewCreateSchema, InterviewUpdateSchema, InterviewAudioSchema } fr
 import { eq, isNull, and, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import type { TranscriptSegment, TranslationSegment, MarkerInsert } from '@/types/database'
+import type { TranslationSegment, MarkerInsert } from '@/types/database'
 
 export async function createInterview(input: z.infer<typeof InterviewCreateSchema>) {
   const parsed = InterviewCreateSchema.parse(input)
@@ -174,33 +174,37 @@ export async function saveSegmentEdit(
   segmentIdx: number,
   text: string,
 ) {
-  const [row] = await db
-    .select({ segments: transcripts.segments })
-    .from(transcripts)
-    .where(eq(transcripts.id, transcriptId))
-    .limit(1)
+  const idx = Math.floor(Number(segmentIdx))
+  if (!Number.isFinite(idx) || idx < 0) return
+  // Safe: idx is a non-negative integer produced by our own JS, not from user input
+  const idxRaw = sql.raw(String(idx))
+  const pathRaw = sql.raw(`ARRAY['${String(idx)}']`)
 
-  if (!row) return
-
-  const segs = (row.segments ?? []) as TranscriptSegment[]
-  const seg = segs[segmentIdx]
-  if (!seg) return
-
-  segs[segmentIdx] = {
-    ...seg,
-    text,
-    edited: true,
-    editedByHuman: true,
-    // Preserve original text only on the first human edit
-    originalText: seg.editedByHuman ? seg.originalText : seg.text,
-  }
-
-  await db
-    .update(transcripts)
-    .set({ segments: segs })
-    .where(eq(transcripts.id, transcriptId))
-
-  revalidatePath(`/interviews/${interviewId}`)
+  // Atomic jsonb_set — no read needed, safe under concurrent rapid edits.
+  // Preserves originalText on the first human edit only (same logic as the old read-modify-write).
+  // No revalidatePath: page is force-dynamic so users always get fresh data on next visit,
+  // and the client applies optimistic updates immediately. Removing it prevents pool exhaustion
+  // when edits happen faster than the pool (max 3) can serve the triggered re-renders.
+  await db.execute(sql`
+    UPDATE transcripts
+    SET segments = jsonb_set(
+      segments,
+      ${pathRaw},
+      (segments->${idxRaw}) || jsonb_build_object(
+        'text', ${text}::text,
+        'edited', true::bool,
+        'editedByHuman', true::bool,
+        'originalText', CASE
+          WHEN (segments->${idxRaw}->>'editedByHuman')::boolean = true
+          THEN segments->${idxRaw}->>'originalText'
+          ELSE segments->${idxRaw}->>'text'
+        END
+      ),
+      false
+    )
+    WHERE id = ${transcriptId}
+  `)
+  void interviewId
 }
 
 export async function hideSegment(
