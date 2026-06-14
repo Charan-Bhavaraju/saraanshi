@@ -139,7 +139,7 @@ export async function createMarker(input: Omit<MarkerInsert, 'id' | 'createdAt' 
     .values(input)
     .returning()
 
-  revalidatePath(`/interviews/${input.interviewId}`)
+  // No revalidatePath — client applies optimistic update immediately.
   return marker
 }
 
@@ -149,7 +149,8 @@ export async function deleteMarker(markerId: string, interviewId: string) {
     .set({ deletedAt: new Date() })
     .where(eq(markers.id, markerId))
 
-  revalidatePath(`/interviews/${interviewId}`)
+  // No revalidatePath — client applies optimistic update immediately.
+  void interviewId
 }
 
 export async function updateMarkerNote(
@@ -164,7 +165,8 @@ export async function updateMarkerNote(
     .where(and(eq(markers.id, markerId), isNull(markers.deletedAt)))
     .returning()
 
-  revalidatePath(`/interviews/${interviewId}`)
+  // No revalidatePath — client applies optimistic update immediately.
+  void interviewId
   return marker
 }
 
@@ -276,7 +278,9 @@ export async function saveTranslation(
     .set({ translationSegments: segments })
     .where(eq(transcripts.id, transcriptId))
 
-  revalidatePath(`/interviews/${interviewId}`)
+  // No revalidatePath — client applies optimistic updates; batched writes from
+  // handleTranslationEdit mean the final flush always has the complete latest state.
+  void interviewId
 }
 
 // --- Transcript fetch ---

@@ -66,6 +66,12 @@ export default function TranscriptViewer({
   const [undoSegment, setUndoSegment] = useState<{ idx: number; text: string } | null>(null)
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Debounced translation save: accumulate rapid edits and flush in one request.
+  // Using a ref so the timer callback always captures the latest state without
+  // needing translationSegments in the callback's closure.
+  const translationFlushTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingTranslationRef = useRef<TranslationSegment[]>([])
+
   const [expanded, setExpanded] = useState(false)
   const [hideSource, setHideSource] = useState(false)
   const [isHidingFillers, setIsHidingFillers] = useState(false)
@@ -133,21 +139,29 @@ export default function TranscriptViewer({
     }
   }, [interviewId, transcriptId])
 
-  const handleTranslationEdit = useCallback(async (segmentIdx: number, enText: string) => {
+  const handleTranslationEdit = useCallback((segmentIdx: number, enText: string) => {
     if (!transcriptId) return
-    const updated = translationSegments.map(t =>
-      t.segmentIdx === segmentIdx ? { ...t, enText } : t
-    )
-    if (!updated.find(t => t.segmentIdx === segmentIdx)) {
-      updated.push({ segmentIdx, enText, confidence: 'high' })
-    }
-    setTranslationSegments(updated)
-    try {
-      await saveTranslation(transcriptId, interviewId, updated)
-    } catch (e) {
-      console.error('saveTranslation failed', e)
-    }
-  }, [transcriptId, interviewId, translationSegments])
+    // Use functional update so rapid consecutive edits each build on the previous
+    // state rather than all reading the same stale closure.
+    setTranslationSegments(prev => {
+      const updated = prev.map(t => t.segmentIdx === segmentIdx ? { ...t, enText } : t)
+      if (!updated.find(t => t.segmentIdx === segmentIdx)) {
+        updated.push({ segmentIdx, enText, confidence: 'high' })
+      }
+      pendingTranslationRef.current = updated
+      return updated
+    })
+    // Debounce: cancel any queued save and reschedule 1 s after the last edit.
+    // Multiple rapid edits send exactly one request with the final accumulated state.
+    if (translationFlushTimer.current) clearTimeout(translationFlushTimer.current)
+    translationFlushTimer.current = setTimeout(() => {
+      const toSave = pendingTranslationRef.current
+      if (toSave.length === 0) return
+      saveTranslation(transcriptId, interviewId, toSave).catch(e =>
+        console.error('saveTranslation failed', e)
+      )
+    }, 1000)
+  }, [transcriptId, interviewId])
 
   const handleHideSegment = useCallback(async (segmentIdx: number) => {
     if (!transcriptId) return
@@ -238,12 +252,15 @@ export default function TranscriptViewer({
 
   const handleTranslate = useCallback(async () => {
     if (!transcriptId) return
+    // Cancel any pending debounced translation save so it doesn't overwrite the new batch
+    if (translationFlushTimer.current) clearTimeout(translationFlushTimer.current)
     setIsTranslating(true)
     try {
       const res = await fetch(`/api/interviews/${interviewId}/translate`, { method: 'POST' })
       if (!res.ok) throw new Error('Translation failed')
       const { segments: translated }: { segments: TranslationSegment[] } = await res.json()
       setTranslationSegments(translated)
+      pendingTranslationRef.current = translated
       await saveTranslation(transcriptId, interviewId, translated)
       setShowTranslation(true)
     } catch {
