@@ -155,3 +155,69 @@ export async function callJSON<T>(opts: CallJSONOpts): Promise<CallJSONResult<T>
     costInrPaise: cost,
   }
 }
+
+type CallTextOpts = {
+  model: string
+  system: string
+  user: string
+  operation: UsageOperation
+  maxTokens?: number
+  interviewId?: string | null
+  cacheSystem?: boolean
+}
+
+export type CallTextResult = {
+  text: string
+  model: string
+  inputTokens: number
+  outputTokens: number
+  costInrPaise: number
+}
+
+// One prose (non-JSON) call — for findings drafting. Caches the system prompt,
+// logs usage+cost, and returns the assistant's text.
+export async function callText(opts: CallTextOpts): Promise<CallTextResult> {
+  const {
+    model,
+    system,
+    user,
+    operation,
+    maxTokens = 2048,
+    interviewId = null,
+    cacheSystem = true,
+  } = opts
+
+  const client = getClient()
+  const message = await client.messages.create({
+    model,
+    max_tokens: maxTokens,
+    system: cacheSystem
+      ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
+      : system,
+    messages: [{ role: 'user', content: user }],
+  })
+
+  const text = message.content
+    .filter(b => b.type === 'text')
+    .map(b => b.text ?? '')
+    .join('')
+    .trim()
+
+  const u = message.usage ?? {}
+  const inputTokens = u.input_tokens ?? 0
+  const outputTokens = u.output_tokens ?? 0
+  const cost = costInrPaise(model, inputTokens, outputTokens, u.cache_read_input_tokens ?? 0)
+
+  await logUsage({
+    interviewId,
+    provider: 'anthropic',
+    operation,
+    model,
+    inputTokens,
+    outputTokens,
+    costInrPaise: cost,
+    requestId: message.id ?? null,
+  })
+
+  return { text, model, inputTokens, outputTokens, costInrPaise: cost }
+}

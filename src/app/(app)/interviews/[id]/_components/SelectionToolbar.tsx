@@ -19,11 +19,12 @@ const MARKER_TYPES: { type: MarkerType; label: string; color: string }[] = [
 type Props = {
   selection: SelectionData
   onSelect: (type: MarkerType) => void
+  onCode?: () => void
   onClose: () => void
   saving: boolean
 }
 
-export default function SelectionToolbar({ selection, onSelect, onClose, saving }: Props) {
+export default function SelectionToolbar({ selection, onSelect, onCode, onClose, saving }: Props) {
   const toolbarRef = useRef<HTMLDivElement>(null)
 
   // Dismiss when user clicks anywhere outside the toolbar.
@@ -85,6 +86,26 @@ export default function SelectionToolbar({ selection, onSelect, onClose, saving 
           {label}
         </button>
       ))}
+      {onCode && (
+        <>
+          <div style={{ width: 1, height: 16, background: '#2D3545', margin: '0 2px' }} />
+          <button
+            disabled={saving}
+            onMouseDown={e => e.stopPropagation()}
+            onClick={onCode}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg transition-all disabled:opacity-50"
+            style={{ color: '#FAF7F2', fontWeight: 500 }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#0E5C5C40')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            title="Code this passage to a theme"
+          >
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
+              <path d="M2 4.5h10M2 7h10M2 9.5h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+            Code
+          </button>
+        </>
+      )}
       <div style={{ width: 1, height: 16, background: '#2D3545', margin: '0 2px' }} />
       <button
         onMouseDown={e => e.stopPropagation()}

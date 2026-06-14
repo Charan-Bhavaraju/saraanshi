@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -63,6 +64,14 @@ export default function UserMenu({
                 {email}
               </p>
             </div>
+            <Link
+              href="/settings/costs"
+              onClick={() => setOpen(false)}
+              className="block w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-paper-2"
+              style={{ color: '#4A5263' }}
+            >
+              AI spend
+            </Link>
             <button
               onClick={signOut}
               className="w-full text-left px-4 py-2.5 text-sm transition-colors hover:bg-paper-2"

@@ -7,6 +7,7 @@ import { eq, isNull, and, sql } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import type { TranslationSegment, MarkerInsert } from '@/types/database'
+import { indexInterview } from '@/lib/rag/indexing'
 
 export async function createInterview(input: z.infer<typeof InterviewCreateSchema>) {
   const parsed = InterviewCreateSchema.parse(input)
@@ -263,6 +264,14 @@ export async function markReviewed(interviewId: string) {
     .update(interviews)
     .set({ status: 'reviewed' })
     .where(and(eq(interviews.id, interviewId), isNull(interviews.deletedAt)))
+
+  // Index the transcript for RAG (Layer 3). Best-effort — a failure here (e.g.
+  // missing GEMINI_API_KEY) must not block marking the interview reviewed.
+  try {
+    await indexInterview(interviewId)
+  } catch (err) {
+    console.error('[markReviewed] RAG indexing failed', err)
+  }
 
   revalidatePath(`/interviews/${interviewId}`)
   revalidatePath('/interviews')

@@ -4,14 +4,17 @@ import { useState } from 'react'
 import SuggestedThemes from './SuggestedThemes'
 import ThemeTree from './ThemeTree'
 import SaturationTracker from './SaturationTracker'
+import AskCorpus from './AskCorpus'
 import type { SuggestedTheme, ClusterStatus, ThemeNode, SaturationPoint } from '../actions'
+import type { IndexStatus } from '@/lib/rag/indexing'
 
-type View = 'suggested' | 'tree' | 'saturation'
+type View = 'suggested' | 'tree' | 'saturation' | 'ask'
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'suggested', label: 'Suggested themes' },
   { id: 'tree', label: 'Theme tree' },
   { id: 'saturation', label: 'Saturation' },
+  { id: 'ask', label: 'Ask the corpus' },
 ]
 
 export default function AnalysisWorkspace({
@@ -19,11 +22,13 @@ export default function AnalysisWorkspace({
   status,
   themes,
   saturation,
+  indexStatus,
 }: {
   initialSuggestions: SuggestedTheme[]
   status: ClusterStatus
   themes: ThemeNode[]
   saturation: SaturationPoint[]
+  indexStatus: IndexStatus
 }) {
   const [view, setView] = useState<View>('suggested')
 
@@ -52,6 +57,7 @@ export default function AnalysisWorkspace({
       {view === 'suggested' && <SuggestedThemes initial={initialSuggestions} status={status} />}
       {view === 'tree' && <ThemeTree initial={themes} />}
       {view === 'saturation' && <SaturationTracker data={saturation} />}
+      {view === 'ask' && <AskCorpus indexStatus={indexStatus} />}
     </div>
   )
 }

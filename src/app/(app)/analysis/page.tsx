@@ -3,17 +3,19 @@ import {
   getClusterStatus,
   getThemes,
   getSaturationData,
+  getCorpusIndexStatus,
 } from './actions'
 import AnalysisWorkspace from './_components/AnalysisWorkspace'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AnalysisPage() {
-  const [suggestions, status, themes, saturation] = await Promise.all([
+  const [suggestions, status, themes, saturation, indexStatus] = await Promise.all([
     getCachedSuggestedThemes(),
     getClusterStatus(),
     getThemes(),
     getSaturationData(),
+    getCorpusIndexStatus(),
   ])
 
   return (
@@ -47,6 +49,7 @@ export default async function AnalysisPage() {
           status={status}
           themes={themes}
           saturation={saturation}
+          indexStatus={indexStatus}
         />
       </div>
     </div>

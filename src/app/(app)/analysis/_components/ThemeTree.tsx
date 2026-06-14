@@ -139,6 +139,33 @@ function ThemeDetail({
   const [parentId, setParentId] = useState<string | null>(theme.parentId)
   const [pending, startTransition] = useTransition()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [drafting, setDrafting] = useState(false)
+  const [draftError, setDraftError] = useState<string | null>(null)
+
+  async function draftFindings() {
+    setDrafting(true)
+    setDraftError(null)
+    try {
+      const res = await fetch(`/api/analysis/themes/${theme.id}/findings`, { method: 'POST' })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error ?? 'Draft failed')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `findings-${theme.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase().slice(0, 40) || 'theme'}.docx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setDraftError(e instanceof Error ? e.message : 'Draft failed')
+    } finally {
+      setDrafting(false)
+    }
+  }
 
   // Exclude self + descendants from parent options to prevent cycles.
   const descendants = useMemo(() => collectDescendants(theme.id, childrenOf), [theme.id, childrenOf])
@@ -217,6 +244,23 @@ function ThemeDetail({
             {theme.createdBy === 'cluster' ? ' · from cluster' : ''}
           </span>
         </div>
+      </div>
+
+      {/* Findings draft */}
+      <div className="flex items-center gap-3 flex-wrap mb-5">
+        <button
+          onClick={draftFindings}
+          disabled={drafting || theme.codeCount === 0}
+          className="text-sm font-medium rounded-lg px-3.5 py-2 transition-all disabled:opacity-50"
+          style={{ background: '#B8842A', color: '#FAF7F2' }}
+          title={theme.codeCount === 0 ? 'Code passages to this theme first' : 'Draft a findings subsection (1 Claude call) and download as DOCX'}
+        >
+          {drafting ? 'Drafting…' : 'Draft findings section'}
+        </button>
+        <span className="text-xs" style={{ color: '#8A929C' }}>
+          1 Claude call · 500–800 words · downloads a DOCX
+        </span>
+        {draftError && <span className="text-xs" style={{ color: '#B8456D' }}>{draftError}</span>}
       </div>
 
       {/* Coded passages */}

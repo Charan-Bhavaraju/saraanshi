@@ -15,6 +15,7 @@ export const MAX_TOKENS = {
   insights: 2000,
   findings: 1500,
   themeNaming: 256,
+  rag: 1500,
 } as const
 
 // ── Layer 1: per-interview insights (Haiku, structured JSON) ──

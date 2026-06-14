@@ -4,19 +4,19 @@ import { db } from '@/db'
 import {
   interviews,
   transcripts,
-  contacts,
   interviewReflections,
   focusPoints,
   themes,
   themeCodes,
   tasks,
 } from '@/db/schema'
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { callJSON, MODELS } from '@/lib/ai/anthropic'
 import { estimateInsightsPaise } from '@/lib/ai/cost'
 import { embedBatch } from '@/lib/ai/gemini'
 import { redact } from '@/lib/ai/redaction'
+import { buildContactRedactionEntries } from '@/lib/ai/redaction-db'
 import { INSIGHTS_SYSTEM, buildInsightsUser, MAX_TOKENS } from '@/lib/ai/prompts'
 import type {
   TranscriptSegment,
@@ -67,22 +67,6 @@ export type InsightsData = {
 const VALID_CONFIDENCE = new Set<Confidence>(['high', 'medium', 'low'])
 function coerceConfidence(c: unknown): Confidence {
   return VALID_CONFIDENCE.has(c as Confidence) ? (c as Confidence) : 'medium'
-}
-
-// Reads decrypted real names (pgsodium view, falling back to plaintext column),
-// so redaction can scrub every contact's real name before any text leaves us.
-async function getDecryptedContacts(): Promise<Array<{ id: string; realName: string | null }>> {
-  try {
-    const rows = await db.execute(
-      sql`SELECT id, decrypted_real_name AS real_name FROM decrypted_contacts`,
-    )
-    return (rows as unknown as Array<{ id: string; real_name: string | null }>).map(r => ({
-      id: r.id,
-      realName: r.real_name,
-    }))
-  } catch {
-    return db.select({ id: contacts.id, realName: contacts.realName }).from(contacts)
-  }
 }
 
 // Picks the source text for a segment per the chosen analysis source.
@@ -204,11 +188,10 @@ async function buildInsightsRequest(
 
   // Build redaction entries: the participant's real name → their code, every
   // other contact's real name → [NAME], plus default hospital aliases.
-  const decrypted = await getDecryptedContacts()
-  const contactEntries = decrypted.map(c => ({
-    realName: c.realName,
-    code: c.id === interview.contactId ? interview.participantCode ?? 'P' : 'NAME',
-  }))
+  const contactEntries = await buildContactRedactionEntries(
+    interview.contactId,
+    interview.participantCode,
+  )
 
   const speakerMap =
     (interview.metadata as { speakerMap?: Record<string, string> } | null)?.speakerMap ?? {}

@@ -13,7 +13,9 @@ import { and, eq, isNull, sql, inArray, count } from 'drizzle-orm'
 import { revalidatePath } from 'next/cache'
 import { callJSON, MODELS } from '@/lib/ai/anthropic'
 import { THEME_NAMING_SYSTEM, buildThemeNamingUser, MAX_TOKENS } from '@/lib/ai/prompts'
-import type { ThemeCreatedBy } from '@/types/database'
+import { indexAllReviewed, getIndexStatus, type IndexStatus } from '@/lib/rag/indexing'
+import { analysisSessions } from '@/db/schema'
+import type { ThemeCreatedBy, ChatMessage } from '@/types/database'
 
 // ─── View A: suggested themes (clustering) ───
 
@@ -389,6 +391,32 @@ export async function deleteTheme(id: string): Promise<void> {
 // ─── View C: saturation tracker ───
 
 export type SaturationPoint = { label: string; count: number }
+
+// ─── View D: RAG corpus indexing + sessions ───
+// NOTE: IndexStatus is re-exported via the type-only barrel below the actions,
+// not here — a 'use server' file may only export async functions.
+
+export async function getCorpusIndexStatus(): Promise<IndexStatus> {
+  return getIndexStatus()
+}
+
+// User-initiated: index every reviewed/analyzed interview that's new or stale.
+export async function indexCorpus(): Promise<{ indexedInterviews: number; totalChunks: number }> {
+  const result = await indexAllReviewed()
+  revalidatePath('/analysis')
+  return result
+}
+
+export async function saveAnalysisSession(
+  title: string,
+  messages: ChatMessage[],
+): Promise<{ id: string }> {
+  const [row] = await db
+    .insert(analysisSessions)
+    .values({ title: title.slice(0, 200), messages })
+    .returning({ id: analysisSessions.id })
+  return { id: row.id }
+}
 
 export async function getSaturationData(): Promise<SaturationPoint[]> {
   const rows = (await db.execute(sql`
