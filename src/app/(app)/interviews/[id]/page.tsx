@@ -131,7 +131,7 @@ export default async function InterviewDetailPage({
   const [insightsData, objectivesData] = insightsEnabled
     ? await Promise.all([getInsights(id), getObjectives(id)])
     : [null, null]
-  const insightsChars = segments.reduce((n, s) => n + (s.hidden ? 0 : s.text.length), 0)
+  const insightsChars = segments.reduce((n, s) => n + (s.hidden ? 0 : (s.text ?? '').length), 0)
   const estimatedPaise = estimateInsightsPaise(MODELS.haiku, Math.ceil(insightsChars / 4) + 600)
   const objectivesEstimatedPaise = estimateInsightsPaise(MODELS.haiku, Math.ceil(insightsChars / 4) + 600, 3500)
   const hasTranslation = translationSegments.length > 0

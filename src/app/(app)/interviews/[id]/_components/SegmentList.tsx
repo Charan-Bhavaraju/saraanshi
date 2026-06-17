@@ -33,7 +33,7 @@ const MARKER_TYPE_COLORS: Record<MarkerType, string> = {
 function buildSpeakerIndex(segments: TranscriptSegment[]): string[] {
   const seen: string[] = []
   for (const seg of segments) {
-    if (!seen.includes(seg.speaker)) seen.push(seg.speaker)
+    if (seg.speaker && !seen.includes(seg.speaker)) seen.push(seg.speaker)
   }
   return seen
 }
