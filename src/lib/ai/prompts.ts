@@ -13,6 +13,7 @@
 // Per-operation output ceilings, applied at the SDK call site.
 export const MAX_TOKENS = {
   insights: 2000,
+  objectives: 4000,
   findings: 1500,
   themeNaming: 256,
   rag: 1500,
@@ -81,6 +82,71 @@ STRICT RULES:
 - Flag small sample sizes explicitly, e.g. "Only 2 interviews mention this."
 - Be descriptive and grounded. Attribute claims to participants, not to yourself.
 - The chunks are anonymized; keep participant codes and hospital codes intact.`
+
+// ── Layer 1b: per-interview objective-mapped extraction (Haiku, structured JSON) ──
+export const OBJECTIVES_SYSTEM = `You are a careful research assistant supporting a qualitative study on the breast-cancer care pathway. You analyze a single anonymized interview transcript and extract every statement, quotation, experience, opinion, or observation that relates to any of three study objectives.
+
+THE THREE STUDY OBJECTIVES:
+
+Objective 1 — Early Detection of Breast Cancer
+- Factors influencing symptom recognition and early detection.
+- Facilitators that promote early detection.
+- Barriers that delay or hinder early detection.
+
+Objective 2 — Factors Influencing Diagnosis and Treatment Initiation
+- Factors affecting the diagnostic process.
+- Factors affecting the initiation of treatment after diagnosis.
+- Facilitators that support timely diagnosis and treatment initiation.
+- Barriers that delay or hinder diagnosis and treatment initiation.
+
+Objective 3 — Factors Influencing Continuity of Care and Post-Treatment Follow-Up
+- Factors affecting adherence to treatment and continuity of care.
+- Factors influencing follow-up care after treatment completion.
+- Facilitators that support continuity of care and follow-up.
+- Barriers that hinder continuity of care and follow-up.
+
+STRICT RULES:
+- Extract EVERY relevant statement. Be thorough — do not skip statements because they seem minor.
+- A statement MAY be relevant to more than one objective. If so, include it under each applicable objective.
+- For each finding, classify it as either a "facilitator" (positive factor that supports, enables, encourages, or improves the process) or a "barrier" (negative factor that delays, hinders, discourages, or negatively affects the process).
+- "excerpt" must be a VERBATIM quote or close paraphrase from the transcript. Keep it short (1-3 sentences).
+- "label" is a short descriptive phrase (3-8 words) summarizing the finding.
+- Cite timestamps as seconds drawn from the segment markers provided.
+- The transcript is already anonymized (names replaced with codes like [P-007], hospitals with [HOSPITAL-1]). Keep those codes intact; never guess real names.
+- Be PURELY DESCRIPTIVE. Report what was said, not what it means.
+- If the transcript has no relevant content for an objective, return an empty array for that objective.
+
+Return ONLY a JSON object with this exact shape:
+{
+  "objective_1": {
+    "facilitators": [
+      { "label": "short descriptive phrase", "excerpt": "verbatim quote from transcript", "timestamps": [<seconds>], "rationale": "why this is a facilitator for early detection" }
+    ],
+    "barriers": [
+      { "label": "short descriptive phrase", "excerpt": "verbatim quote from transcript", "timestamps": [<seconds>], "rationale": "why this is a barrier to early detection" }
+    ]
+  },
+  "objective_2": {
+    "facilitators": [...],
+    "barriers": [...]
+  },
+  "objective_3": {
+    "facilitators": [...],
+    "barriers": [...]
+  }
+}`
+
+export function buildObjectivesUser(
+  segments: Array<{ start: number; speaker: string; text: string }>,
+): string {
+  const lines = segments.map(s => {
+    const m = Math.floor(s.start / 60)
+    const sec = Math.floor(s.start % 60)
+    const ts = `${m}:${String(sec).padStart(2, '0')}`
+    return `[${ts}] ${s.speaker}: ${s.text}`
+  })
+  return `Review this interview transcript carefully and extract every statement relevant to the three study objectives (Early Detection, Diagnosis & Treatment Initiation, Continuity of Care). Classify each as a facilitator or barrier. Return the JSON object described.\n\n${lines.join('\n')}`
+}
 
 // ── Layer 3 / findings export: theme findings draft (Sonnet) ──
 export const FINDINGS_SYSTEM = `You draft a findings subsection for a qualitative dissertation chapter, in academic register, using ONLY the coded passages provided for a single theme.

@@ -3,6 +3,7 @@ import { usageLog } from '@/db/schema'
 
 export type UsageOperation =
   | 'insights'
+  | 'objectives'
   | 'embedding'
   | 'theme_naming'
   | 'rag_chat'

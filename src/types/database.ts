@@ -52,6 +52,12 @@ export type {
   AnalysisSessionInsert,
   ThemeSuggestion,
   ThemeSuggestionInsert,
+  Objective,
+  FindingCategory,
+  ObjectiveFinding,
+  ObjectiveFindingInsert,
+  ObjectiveRun,
+  ObjectiveRunInsert,
   ClusterWatermark,
 } from '@/db/schema/analysis'
 

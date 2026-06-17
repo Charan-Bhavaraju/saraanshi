@@ -70,6 +70,40 @@ export const focusPoints = pgTable('focus_points', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
 
+// ─── Layer 1b: objective-mapped findings ───
+export const objectiveValues = ['objective_1', 'objective_2', 'objective_3'] as const
+export type Objective = (typeof objectiveValues)[number]
+
+export const findingCategoryValues = ['facilitator', 'barrier'] as const
+export type FindingCategory = (typeof findingCategoryValues)[number]
+
+export const objectiveFindings = pgTable('objective_findings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  interviewId: uuid('interview_id')
+    .notNull()
+    .references(() => interviews.id, { onDelete: 'cascade' }),
+  objective: text('objective').notNull().$type<Objective>(),
+  category: text('category').notNull().$type<FindingCategory>(),
+  label: text('label').notNull(),
+  excerpt: text('excerpt'),
+  rationale: text('rationale'),
+  timestamps: jsonb('timestamps').$type<number[]>(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+// One row per interview — tracks when objectives were last generated.
+export const objectiveRuns = pgTable('objective_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  interviewId: uuid('interview_id')
+    .notNull()
+    .unique()
+    .references(() => interviews.id, { onDelete: 'cascade' }),
+  sourceUsed: text('source_used').notNull().$type<ReflectionSource>(),
+  llmModel: text('llm_model'),
+  costInrPaise: integer('cost_inr_paise'),
+  generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow(),
+})
+
 // ─── Layer 2: themes (her authoritative coding scheme) ───
 export const themes = pgTable('themes', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -143,6 +177,20 @@ export const interviewReflectionsRelations = relations(interviewReflections, ({ 
   }),
 }))
 
+export const objectiveFindingsRelations = relations(objectiveFindings, ({ one }) => ({
+  interview: one(interviews, {
+    fields: [objectiveFindings.interviewId],
+    references: [interviews.id],
+  }),
+}))
+
+export const objectiveRunsRelations = relations(objectiveRuns, ({ one }) => ({
+  interview: one(interviews, {
+    fields: [objectiveRuns.interviewId],
+    references: [interviews.id],
+  }),
+}))
+
 export const focusPointsRelations = relations(focusPoints, ({ one }) => ({
   interview: one(interviews, {
     fields: [focusPoints.interviewId],
@@ -204,5 +252,11 @@ export type AnalysisSessionInsert = typeof analysisSessions.$inferInsert
 
 export type ThemeSuggestion = typeof themeSuggestions.$inferSelect
 export type ThemeSuggestionInsert = typeof themeSuggestions.$inferInsert
+
+export type ObjectiveFinding = typeof objectiveFindings.$inferSelect
+export type ObjectiveFindingInsert = typeof objectiveFindings.$inferInsert
+
+export type ObjectiveRun = typeof objectiveRuns.$inferSelect
+export type ObjectiveRunInsert = typeof objectiveRuns.$inferInsert
 
 export type ClusterWatermark = typeof clusterWatermark.$inferSelect

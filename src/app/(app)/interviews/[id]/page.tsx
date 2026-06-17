@@ -15,6 +15,7 @@ import EditInterviewPanel from './_components/EditInterviewPanel'
 import ReplaceAudioPanel from './_components/ReplaceAudioPanel'
 import DetailTabs from './_components/DetailTabs'
 import { getInsights } from './insights/actions'
+import { getObjectives } from './objectives/actions'
 import { estimateInsightsPaise } from '@/lib/ai/cost'
 import { MODELS } from '@/lib/ai/anthropic'
 import type { TranscriptSegment, TranslationSegment, Marker } from '@/types/database'
@@ -127,9 +128,12 @@ export default async function InterviewDetailPage({
 
   // Insights (Layer 1) become available once the interview is reviewed.
   const insightsEnabled = ['reviewed', 'analyzed'].includes(interview.status) && segments.length > 0
-  const insightsData = insightsEnabled ? await getInsights(id) : null
+  const [insightsData, objectivesData] = insightsEnabled
+    ? await Promise.all([getInsights(id), getObjectives(id)])
+    : [null, null]
   const insightsChars = segments.reduce((n, s) => n + (s.hidden ? 0 : s.text.length), 0)
   const estimatedPaise = estimateInsightsPaise(MODELS.haiku, Math.ceil(insightsChars / 4) + 600)
+  const objectivesEstimatedPaise = estimateInsightsPaise(MODELS.haiku, Math.ceil(insightsChars / 4) + 600, 3500)
   const hasTranslation = translationSegments.length > 0
 
   return (
@@ -302,6 +306,12 @@ export default async function InterviewDetailPage({
             hasTranslation,
             estimatedPaise,
             initial: insightsData ?? { reflection: null, focusPoints: [] },
+          }}
+          objectivesProps={{
+            interviewId: id,
+            hasTranslation,
+            estimatedPaise: objectivesEstimatedPaise,
+            initial: objectivesData ?? { run: null, findings: [] },
           }}
           transcript={
             <TranscriptViewer
