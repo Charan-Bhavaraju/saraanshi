@@ -1,9 +1,9 @@
 import { logUsage } from './usage'
 
-// Gemini text-embedding-004 via raw REST (no SDK dependency). 768 dimensions.
+// Gemini gemini-embedding-001 via raw REST (no SDK dependency). 768 dimensions.
 // Free tier — every call is still logged to usage_log at ₹0 for completeness.
 
-const MODEL = 'models/text-embedding-004'
+const MODEL = 'models/gemini-embedding-001'
 export const EMBEDDING_DIM = 768
 const BASE = 'https://generativelanguage.googleapis.com/v1beta'
 // batchEmbedContents accepts at most 100 requests per call.
