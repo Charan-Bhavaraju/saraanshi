@@ -7,6 +7,7 @@ import SegmentList from './SegmentList'
 import MarkersList from './MarkersList'
 import EditorBar from './EditorBar'
 import SelectionToolbar, { type SelectionData } from './SelectionToolbar'
+import CodePopover from './CodePopover'
 import {
   updateSpeakerMap,
   createMarker,
@@ -62,6 +63,8 @@ export default function TranscriptViewer({
 
   const [selectionData, setSelectionData] = useState<SelectionData | null>(null)
   const [savingMarker, setSavingMarker] = useState(false)
+  const [codingSelection, setCodingSelection] = useState<SelectionData | null>(null)
+  const [codedToast, setCodedToast] = useState<string | null>(null)
 
   const [undoSegment, setUndoSegment] = useState<{ idx: number; text: string } | null>(null)
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -239,6 +242,17 @@ export default function TranscriptViewer({
     }
   }, [selectionData, interviewId, transcriptId])
 
+  // Open the coding popover for the current selection (closes the marker toolbar).
+  const handleOpenCode = useCallback(() => {
+    setCodingSelection(prev => prev ?? selectionData)
+    setSelectionData(null)
+  }, [selectionData])
+
+  const handleCoded = useCallback((count: number) => {
+    setCodedToast(`Coded to ${count} theme${count === 1 ? '' : 's'}`)
+    setTimeout(() => setCodedToast(null), 2500)
+  }, [])
+
   const handleDeleteMarker = useCallback(async (markerId: string) => {
     // Optimistic removal
     setLocalMarkers(prev => prev.filter(m => m.id !== markerId))
@@ -404,9 +418,28 @@ export default function TranscriptViewer({
         <SelectionToolbar
           selection={selectionData}
           onSelect={handleCreateMarker}
+          onCode={handleOpenCode}
           onClose={() => setSelectionData(null)}
           saving={savingMarker}
         />
+      )}
+
+      {codingSelection && (
+        <CodePopover
+          interviewId={interviewId}
+          selection={codingSelection}
+          onClose={() => setCodingSelection(null)}
+          onCoded={handleCoded}
+        />
+      )}
+
+      {codedToast && (
+        <div
+          className="fixed z-50 left-1/2 px-3 py-2 rounded-xl shadow-lg text-xs font-medium"
+          style={{ bottom: 24, transform: 'translateX(-50%)', background: '#0E5C5C', color: '#FAF7F2' }}
+        >
+          {codedToast}
+        </div>
       )}
     </div>
 
@@ -481,8 +514,18 @@ export default function TranscriptViewer({
           <SelectionToolbar
             selection={selectionData}
             onSelect={handleCreateMarker}
+            onCode={handleOpenCode}
             onClose={() => setSelectionData(null)}
             saving={savingMarker}
+          />
+        )}
+
+        {codingSelection && (
+          <CodePopover
+            interviewId={interviewId}
+            selection={codingSelection}
+            onClose={() => setCodingSelection(null)}
+            onCoded={handleCoded}
           />
         )}
 
