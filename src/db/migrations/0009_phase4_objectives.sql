@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS objective_findings (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_objective_findings_interview ON objective_findings(interview_id);
-CREATE INDEX idx_objective_findings_objective ON objective_findings(objective);
+CREATE INDEX IF NOT EXISTS idx_objective_findings_interview ON objective_findings(interview_id);
+CREATE INDEX IF NOT EXISTS idx_objective_findings_objective ON objective_findings(objective);
 
 CREATE TABLE IF NOT EXISTS objective_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

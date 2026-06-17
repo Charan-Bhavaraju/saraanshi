@@ -10,13 +10,12 @@ import AnalysisWorkspace from './_components/AnalysisWorkspace'
 export const dynamic = 'force-dynamic'
 
 export default async function AnalysisPage() {
-  const [suggestions, status, themes, saturation, indexStatus] = await Promise.all([
-    getCachedSuggestedThemes(),
-    getClusterStatus(),
-    getThemes(),
-    getSaturationData(),
-    getCorpusIndexStatus(),
-  ])
+  // Sequential to avoid exhausting the 3-connection pool on Vercel serverless.
+  const suggestions = await getCachedSuggestedThemes()
+  const status = await getClusterStatus()
+  const themes = await getThemes()
+  const saturation = await getSaturationData()
+  const indexStatus = await getCorpusIndexStatus()
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 pb-20">
