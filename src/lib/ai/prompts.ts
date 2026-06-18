@@ -12,7 +12,7 @@
 
 // Per-operation output ceilings, applied at the SDK call site.
 export const MAX_TOKENS = {
-  insights: 2000,
+  insights: 4000,
   objectives: 4000,
   findings: 1500,
   themeNaming: 256,
