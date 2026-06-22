@@ -65,14 +65,14 @@ function pickText(
 ): string {
   switch (source) {
     case 'raw':
-      return (seg.originalText ?? seg.text).trim()
+      return (seg.originalText ?? seg.text ?? '').trim()
     case 'translation':
-      return (enText ?? seg.text).trim()
+      return (enText ?? seg.text ?? '').trim()
     case 'mixed':
-      return [seg.text.trim(), enText?.trim()].filter(Boolean).join(' / ')
+      return [(seg.text ?? '').trim(), enText?.trim()].filter(Boolean).join(' / ')
     case 'cleaned':
     default:
-      return seg.text.trim()
+      return (seg.text ?? '').trim()
   }
 }
 
