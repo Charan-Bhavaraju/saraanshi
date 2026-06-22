@@ -51,7 +51,7 @@ export default function InsightsTab({
   onSeek,
 }: Props) {
   const [data, setData] = useState<InsightsData>(initial)
-  const [source, setSource] = useState<ReflectionSource>('cleaned')
+  const [source, setSource] = useState<ReflectionSource>(hasTranslation ? 'translation' : 'cleaned')
   const [generating, setGenerating] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [preview, setPreview] = useState<InsightsRequest | null>(null)

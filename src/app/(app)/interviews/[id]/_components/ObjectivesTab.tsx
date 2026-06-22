@@ -68,7 +68,7 @@ export default function ObjectivesTab({
   onSeek,
 }: Props) {
   const [data, setData] = useState<ObjectivesData>(initial)
-  const [source, setSource] = useState<ReflectionSource>('cleaned')
+  const [source, setSource] = useState<ReflectionSource>(hasTranslation ? 'translation' : 'cleaned')
   const [generating, setGenerating] = useState(false)
   const [previewing, setPreviewing] = useState(false)
   const [preview, setPreview] = useState<ObjectivesRequest | null>(null)
