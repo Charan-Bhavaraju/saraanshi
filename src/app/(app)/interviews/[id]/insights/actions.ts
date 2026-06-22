@@ -18,6 +18,7 @@ import { embedBatch } from '@/lib/ai/gemini'
 import { redact } from '@/lib/ai/redaction'
 import { buildContactRedactionEntries } from '@/lib/ai/redaction-db'
 import { INSIGHTS_SYSTEM, buildInsightsUser, MAX_TOKENS } from '@/lib/ai/prompts'
+import { normalizeTimestamps } from '@/lib/ai/timestamps'
 import type {
   TranscriptSegment,
   TranslationSegment,
@@ -320,7 +321,7 @@ export async function generateInsights(
         phrase: f.phrase.trim(),
         rationale: f.rationale ?? null,
         confidence: coerceConfidence(f.confidence),
-        timestamps: Array.isArray(f.timestamps) ? f.timestamps : [],
+        timestamps: normalizeTimestamps(f.timestamps),
         embedding: embeddings[i],
       })),
     )

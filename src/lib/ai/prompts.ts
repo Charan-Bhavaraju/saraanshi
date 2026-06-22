@@ -25,7 +25,7 @@ export const INSIGHTS_SYSTEM = `You are a careful research assistant supporting 
 STRICT RULES:
 - Be PURELY DESCRIPTIVE, never interpretive. Write "She described the cost of treatment at 12:30", NOT "She struggled financially". Report what was said and when, not what it means.
 - Use the researcher's vocabulary: produce "focus points" and "observations". NEVER use the word "theme" — only the researcher decides what becomes a theme.
-- Cite timestamps as MM:SS drawn from the segment markers provided.
+- Cite timestamps as seconds (integer) drawn from the segment markers provided (e.g. 125, not 2:05).
 - Do not invent content. If something is unclear, say so or omit it.
 - The transcript is already anonymized (names replaced with codes like [P-007], hospitals with [HOSPITAL-1]). Keep those codes intact; never guess real names.
 - "confidence" MUST be exactly one of: "high", "medium", "low". No other value is permitted.
@@ -50,10 +50,8 @@ export function buildInsightsUser(
   segments: Array<{ start: number; speaker: string; text: string }>,
 ): string {
   const lines = segments.map(s => {
-    const m = Math.floor(s.start / 60)
-    const sec = Math.floor(s.start % 60)
-    const ts = `${m}:${String(sec).padStart(2, '0')}`
-    return `[${ts}] ${s.speaker}: ${s.text}`
+    const sec = Math.floor(s.start)
+    return `[${sec}s] ${s.speaker}: ${s.text}`
   })
   return `Analyze this interview transcript and return the JSON object described.\n\n${lines.join('\n')}`
 }
@@ -111,7 +109,7 @@ STRICT RULES:
 - For each finding, classify it as either a "facilitator" (positive factor that supports, enables, encourages, or improves the process) or a "barrier" (negative factor that delays, hinders, discourages, or negatively affects the process).
 - "excerpt" must be a VERBATIM quote or close paraphrase from the transcript. Keep it short (1-3 sentences).
 - "label" is a short descriptive phrase (3-8 words) summarizing the finding.
-- Cite timestamps as seconds drawn from the segment markers provided.
+- Cite timestamps as seconds (integer) drawn from the segment markers provided (e.g. 125, not 2:05).
 - The transcript is already anonymized (names replaced with codes like [P-007], hospitals with [HOSPITAL-1]). Keep those codes intact; never guess real names.
 - Be PURELY DESCRIPTIVE. Report what was said, not what it means.
 - If the transcript has no relevant content for an objective, return an empty array for that objective.
@@ -140,10 +138,8 @@ export function buildObjectivesUser(
   segments: Array<{ start: number; speaker: string; text: string }>,
 ): string {
   const lines = segments.map(s => {
-    const m = Math.floor(s.start / 60)
-    const sec = Math.floor(s.start % 60)
-    const ts = `${m}:${String(sec).padStart(2, '0')}`
-    return `[${ts}] ${s.speaker}: ${s.text}`
+    const sec = Math.floor(s.start)
+    return `[${sec}s] ${s.speaker}: ${s.text}`
   })
   return `Review this interview transcript carefully and extract every statement relevant to the three study objectives (Early Detection, Diagnosis & Treatment Initiation, Continuity of Care). Classify each as a facilitator or barrier. Return the JSON object described.\n\n${lines.join('\n')}`
 }

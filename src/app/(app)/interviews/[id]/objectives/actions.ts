@@ -14,6 +14,7 @@ import { estimateInsightsPaise } from '@/lib/ai/cost'
 import { redact } from '@/lib/ai/redaction'
 import { buildContactRedactionEntries } from '@/lib/ai/redaction-db'
 import { OBJECTIVES_SYSTEM, buildObjectivesUser, MAX_TOKENS } from '@/lib/ai/prompts'
+import { normalizeTimestamps } from '@/lib/ai/timestamps'
 import type {
   TranscriptSegment,
   TranslationSegment,
@@ -264,7 +265,7 @@ export async function generateObjectiveFindings(
           label: item.label.trim(),
           excerpt: item.excerpt?.trim() ?? null,
           rationale: item.rationale?.trim() ?? null,
-          timestamps: Array.isArray(item.timestamps) ? item.timestamps : [],
+          timestamps: normalizeTimestamps(item.timestamps),
         })
       }
     }
