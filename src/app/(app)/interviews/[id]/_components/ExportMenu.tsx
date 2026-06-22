@@ -44,6 +44,7 @@ const FORMATS = [
   { key: 'srt',    label: 'SRT subtitles',     ext: '.srt',  description: 'SubRip format' },
   { key: 'vtt',    label: 'WebVTT',            ext: '.vtt',  description: 'Web caption format' },
   { key: 'docx',   label: 'Word document',     ext: '.docx', description: 'Formatted with speaker headers' },
+  { key: 'docx-ts', label: 'Word + timestamps',  ext: '.docx', description: 'With [mm:ss] before each segment' },
   { key: 'quotes', label: 'Quotes only',       ext: '.txt',  description: 'Marked quote excerpts' },
 ] as const
 

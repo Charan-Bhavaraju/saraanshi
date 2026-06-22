@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect } from 'react'
 
 const FORMATS = [
-  { key: 'docx',   label: 'Word document',     ext: '.docx', description: 'Formatted with headers per interview' },
-  { key: 'txt',    label: 'Plain text',        ext: '.txt',  description: 'Speaker text, grouped by interview' },
-  { key: 'txt-ts', label: 'Text + timestamps', ext: '.txt',  description: 'With [mm:ss] and speaker labels' },
+  { key: 'docx',    label: 'Word document',     ext: '.docx', description: 'Formatted with headers per interview' },
+  { key: 'docx-ts', label: 'Word + timestamps', ext: '.docx', description: 'With [mm:ss] before each segment' },
+  { key: 'txt',     label: 'Plain text',        ext: '.txt',  description: 'Speaker text, grouped by interview' },
+  { key: 'txt-ts',  label: 'Text + timestamps', ext: '.txt',  description: 'With [mm:ss] and speaker labels' },
 ] as const
 
 function CheckOption({

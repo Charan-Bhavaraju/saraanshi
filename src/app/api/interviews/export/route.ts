@@ -199,10 +199,83 @@ async function toDocx(ivs: IV[], useTranslation: boolean, includeHidden: boolean
   return new Uint8Array(await Packer.toBuffer(doc))
 }
 
+async function toDocxTs(ivs: IV[], useTranslation: boolean, includeHidden: boolean): Promise<Uint8Array> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Document, Paragraph, TextRun, Packer } = require('docx')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const children: any[] = []
+
+  // Cover
+  children.push(
+    new Paragraph({
+      children: [new TextRun({ text: 'Interview Archive', bold: true, size: 52, color: '0E5C5C' })],
+      spacing: { after: 120 },
+    }),
+    new Paragraph({
+      children: [new TextRun({
+        text: `${fmtDate(new Date())}  ·  ${ivs.length} interviews`,
+        size: 22, color: '8A929C',
+      })],
+      spacing: { after: 600 },
+    }),
+  )
+
+  ivs.forEach((iv, n) => {
+    const segs = prepSegs(iv, useTranslation, includeHidden)
+    const code = iv.participantCode ?? iv.id.slice(0, 8)
+    const type = TYPE_LABELS[iv.type] ?? iv.type
+    const contact = iv.contactName ? `  ·  ${iv.contactName}` : ''
+    const wordCount = segs.reduce((acc, s) => acc + s.text.split(/\s+/).filter(Boolean).length, 0)
+
+    children.push(
+      new Paragraph({
+        pageBreakBefore: n > 0,
+        children: [
+          new TextRun({ text: code, bold: true, size: 40, color: '0E5C5C' }),
+          new TextRun({ text: `  ${type}${contact}`, size: 28, color: '4A5263' }),
+        ],
+        spacing: { before: n === 0 ? 0 : 240, after: 80 },
+      }),
+    )
+
+    children.push(
+      new Paragraph({
+        children: [new TextRun({
+          text: `${meta(iv)}  ·  ${segs.length} segments  ·  ${wordCount.toLocaleString()} words`,
+          size: 18, color: '8A929C',
+        })],
+        spacing: { after: 280 },
+      }),
+    )
+
+    if (segs.length === 0) {
+      children.push(new Paragraph({
+        children: [new TextRun({ text: 'No transcript available.', size: 20, color: 'B5BBC4', italics: true })],
+        spacing: { after: 200 },
+      }))
+      return
+    }
+
+    for (const seg of segs) {
+      children.push(new Paragraph({
+        children: [
+          new TextRun({ text: `[${fmtTs(seg.start)}] `, size: 18, color: '8A929C' }),
+          new TextRun({ text: `${seg.speaker}: `, bold: true, size: 20, color: '1A1F2C' }),
+          new TextRun({ text: seg.text, size: 22, color: '4A5263' }),
+        ],
+        spacing: { after: 100 },
+      }))
+    }
+  })
+
+  const doc = new Document({ sections: [{ properties: {}, children }] })
+  return new Uint8Array(await Packer.toBuffer(doc))
+}
+
 // ── Handler ─────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const format = (req.nextUrl.searchParams.get('format') ?? 'docx') as 'txt' | 'txt-ts' | 'docx'
+  const format = (req.nextUrl.searchParams.get('format') ?? 'docx') as 'txt' | 'txt-ts' | 'docx' | 'docx-ts'
   const includeHidden = req.nextUrl.searchParams.get('includeHidden') === 'true'
   const useTranslation = req.nextUrl.searchParams.get('lang') === 'en'
   const typeFilter = req.nextUrl.searchParams.get('type')
@@ -260,8 +333,10 @@ export async function GET(req: NextRequest) {
   const dateStr = new Date().toISOString().slice(0, 10)
   const suffix = useTranslation ? '-en' : ''
 
-  if (format === 'docx') {
-    const buf = await toDocx(ivs, useTranslation, includeHidden)
+  if (format === 'docx' || format === 'docx-ts') {
+    const buf = format === 'docx-ts'
+      ? await toDocxTs(ivs, useTranslation, includeHidden)
+      : await toDocx(ivs, useTranslation, includeHidden)
     return new Response(buf.buffer as ArrayBuffer, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

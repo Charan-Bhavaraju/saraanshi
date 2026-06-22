@@ -4,7 +4,7 @@ import { interviews, transcripts, markers } from '@/db/schema'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { TranscriptSegment, TranslationSegment, Marker } from '@/types/database'
 
-type Format = 'txt' | 'txt-ts' | 'srt' | 'vtt' | 'docx' | 'quotes'
+type Format = 'txt' | 'txt-ts' | 'srt' | 'vtt' | 'docx' | 'docx-ts' | 'quotes'
 
 function formatTimestamp(s: number, separator = ':'): string {
   const h = Math.floor(s / 3600)
@@ -119,6 +119,44 @@ async function toDocx(
   return new Uint8Array(await Packer.toBuffer(doc))
 }
 
+async function toDocxTs(
+  participantCode: string | null | undefined,
+  segments: TranscriptSegment[],
+): Promise<Uint8Array> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Document, Paragraph, TextRun, HeadingLevel, Packer } = require('docx')
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const children: any[] = []
+
+  children.push(
+    new Paragraph({
+      text: participantCode ?? 'Interview Transcript',
+      heading: HeadingLevel.HEADING_1,
+    }),
+    new Paragraph({ text: '' }),
+  )
+
+  for (const seg of segments) {
+    const m = Math.floor((seg.start ?? 0) / 60)
+    const s = Math.floor((seg.start ?? 0) % 60)
+    const ts = `[${m}:${String(s).padStart(2, '0')}]`
+    children.push(
+      new Paragraph({
+        children: [
+          new TextRun({ text: `${ts} `, size: 18, color: '8A929C' }),
+          new TextRun({ text: `${seg.speaker}: `, bold: true, size: 20 }),
+          new TextRun({ text: seg.text ?? '', size: 22 }),
+        ],
+        spacing: { after: 100 },
+      }),
+    )
+  }
+
+  const doc = new Document({ sections: [{ properties: {}, children }] })
+  return new Uint8Array(await Packer.toBuffer(doc))
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -183,8 +221,10 @@ export async function GET(
     })
   }
 
-  if (format === 'docx') {
-    const buf = await toDocx(interview.participantCode, segments)
+  if (format === 'docx' || format === 'docx-ts') {
+    const buf = format === 'docx-ts'
+      ? await toDocxTs(interview.participantCode, segments)
+      : await toDocx(interview.participantCode, segments)
     return new Response(buf.buffer as ArrayBuffer, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
