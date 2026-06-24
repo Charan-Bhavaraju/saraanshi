@@ -27,3 +27,10 @@ pnpm-debug.log*
 
 # drizzle
 drizzle/
+
+# human findings parsing (local data files)
+parsed-human-findings.json
+interview-id-mapping.json
+doc-to-db-mapping.json
+human-findings-analysis.md
+*.docx

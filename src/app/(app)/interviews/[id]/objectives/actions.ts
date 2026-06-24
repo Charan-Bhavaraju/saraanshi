@@ -20,7 +20,7 @@ import type {
   TranslationSegment,
   ReflectionSource,
 } from '@/types/database'
-import type { Objective, FindingCategory } from '@/db/schema/analysis'
+import type { Objective, FindingCategory, FindingSource } from '@/db/schema/analysis'
 
 // Shape the Haiku call must return (see OBJECTIVES_SYSTEM).
 type FindingItem = {
@@ -45,6 +45,7 @@ export type ObjectiveFindingView = {
   excerpt: string | null
   rationale: string | null
   timestamps: number[]
+  source: FindingSource
 }
 
 export type ObjectiveRunView = {
@@ -93,6 +94,7 @@ async function loadObjectives(interviewId: string): Promise<ObjectivesData> {
       excerpt: objectiveFindings.excerpt,
       rationale: objectiveFindings.rationale,
       timestamps: objectiveFindings.timestamps,
+      source: objectiveFindings.source,
     })
     .from(objectiveFindings)
     .where(eq(objectiveFindings.interviewId, interviewId))
@@ -114,6 +116,7 @@ async function loadObjectives(interviewId: string): Promise<ObjectivesData> {
       excerpt: f.excerpt,
       rationale: f.rationale,
       timestamps: (f.timestamps as number[] | null) ?? [],
+      source: f.source,
     })),
   }
 }
@@ -246,6 +249,7 @@ export async function generateObjectiveFindings(
     excerpt: string | null
     rationale: string | null
     timestamps: number[]
+    source: FindingSource
   }> = []
 
   for (const objKey of ['objective_1', 'objective_2', 'objective_3'] as const) {
@@ -266,15 +270,19 @@ export async function generateObjectiveFindings(
           excerpt: item.excerpt?.trim() ?? null,
           rationale: item.rationale?.trim() ?? null,
           timestamps: normalizeTimestamps(item.timestamps),
+          source: 'llm' as const,
         })
       }
     }
   }
 
-  // Replace prior findings for this interview.
+  // Replace prior LLM findings for this interview (keep human findings).
   await db
     .delete(objectiveFindings)
-    .where(eq(objectiveFindings.interviewId, interviewId))
+    .where(and(
+      eq(objectiveFindings.interviewId, interviewId),
+      eq(objectiveFindings.source, 'llm'),
+    ))
 
   if (rows.length > 0) {
     await db.insert(objectiveFindings).values(rows)

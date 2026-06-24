@@ -375,6 +375,18 @@ function FindingCard({
             style={{ width: 6, height: 6, borderRadius: '50%', background: accentColor, flexShrink: 0 }}
           />
           <span className="text-sm font-medium" style={{ color: '#1A1F2C' }}>{finding.label}</span>
+          {finding.source && finding.source !== 'llm' && (
+            <span
+              className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded"
+              style={{
+                background: finding.source === 'human' ? '#EDE9FE' : '#DBEAFE',
+                color: finding.source === 'human' ? '#6D28D9' : '#1D4ED8',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {finding.source === 'human' ? 'Human' : 'Both'}
+            </span>
+          )}
         </div>
         {finding.timestamps.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap shrink-0">

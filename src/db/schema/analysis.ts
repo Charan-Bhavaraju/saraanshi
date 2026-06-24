@@ -77,6 +77,9 @@ export type Objective = (typeof objectiveValues)[number]
 export const findingCategoryValues = ['facilitator', 'barrier'] as const
 export type FindingCategory = (typeof findingCategoryValues)[number]
 
+export const findingSourceValues = ['llm', 'human', 'both'] as const
+export type FindingSource = (typeof findingSourceValues)[number]
+
 export const objectiveFindings = pgTable('objective_findings', {
   id: uuid('id').primaryKey().defaultRandom(),
   interviewId: uuid('interview_id')
@@ -88,6 +91,7 @@ export const objectiveFindings = pgTable('objective_findings', {
   excerpt: text('excerpt'),
   rationale: text('rationale'),
   timestamps: jsonb('timestamps').$type<number[]>(),
+  source: text('source').notNull().default('llm').$type<FindingSource>(),
   clusterId: uuid('cluster_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 })
