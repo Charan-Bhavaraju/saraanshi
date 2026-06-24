@@ -7,6 +7,7 @@ import Link from 'next/link'
 import type { InterviewWithContact } from '@/types/database'
 import InterviewListClient from './_components/InterviewListClient'
 import BulkExportButton from './_components/BulkExportButton'
+import BackfillButton from './_components/BackfillButton'
 
 // Bust immediately via revalidatePath('/interviews') in server actions; 30s TTL as safety-net
 export const revalidate = 30
@@ -66,7 +67,10 @@ export default async function InterviewsPage() {
         </div>
         <div className="flex items-center gap-2">
           {stats.transcribed > 0 && (
-            <BulkExportButton hasAnyTranslation={stats.transcribed > 0} />
+            <>
+              <BackfillButton />
+              <BulkExportButton hasAnyTranslation={stats.transcribed > 0} />
+            </>
           )}
           <Link
             href="/interviews/new"

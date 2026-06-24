@@ -90,7 +90,7 @@ export default function BulkExportButton({ hasAnyTranslation }: { hasAnyTranslat
             <CheckOption checked={includeHidden} onChange={setIncludeHidden} label="Include hidden segments" activeColor="#8A929C" />
           </div>
 
-          <div className="py-1">
+          <div className="py-1" style={{ borderBottom: '1px solid #ECE6D9' }}>
             {FORMATS.map(({ key, label, ext, description }) => (
               <a
                 key={key}
@@ -111,6 +111,27 @@ export default function BulkExportButton({ hasAnyTranslation }: { hasAnyTranslat
                 </div>
               </a>
             ))}
+          </div>
+
+          {/* Objectives matrix export */}
+          <div className="py-1">
+            <a
+              href="/api/interviews/export-objectives"
+              download
+              onClick={() => setOpen(false)}
+              className="flex items-start gap-3 px-4 py-2.5 transition-all"
+              style={{ color: '#1A1F2C', textDecoration: 'none' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#F5F1E9')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-medium">Objectives matrix</span>
+                  <span className="text-xs" style={{ color: '#B5BBC4', fontFamily: 'var(--font-mono)', fontSize: 10 }}>.csv</span>
+                </div>
+                <p className="text-xs mt-0.5" style={{ color: '#8A929C' }}>All interviews × 3 objectives with facilitators & barriers</p>
+              </div>
+            </a>
           </div>
         </div>
       )}

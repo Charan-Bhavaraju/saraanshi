@@ -11,6 +11,7 @@ import {
 } from '../objectives/actions'
 import type { ReflectionSource } from '@/types/database'
 import type { Objective, FindingCategory } from '@/db/schema/analysis'
+import ObjectivesMatrixView from './ObjectivesMatrixView'
 
 type Props = {
   interviewId: string
@@ -74,6 +75,7 @@ export default function ObjectivesTab({
   const [preview, setPreview] = useState<ObjectivesRequest | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const [viewMode, setViewMode] = useState<'cards' | 'matrix'>('cards')
   const hasFindings = data.run !== null
   const sourceOptions = SOURCE_OPTIONS.filter(o => hasTranslation || !o.needsTranslation)
 
@@ -115,7 +117,7 @@ export default function ObjectivesTab({
   })
 
   return (
-    <div className="max-w-3xl">
+    <div className={viewMode === 'matrix' ? '' : 'max-w-3xl'}>
       {/* Controls */}
       <div className="rounded-[14px] p-5 mb-6" style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}>
         <label className="block text-xs font-medium mb-1.5" style={{ color: '#4A5263', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10 }}>
@@ -180,7 +182,45 @@ export default function ObjectivesTab({
         </div>
       )}
 
+      {/* View mode toggle — shown only when findings exist */}
       {!generating && hasFindings && (
+        <div className="flex items-center gap-2 mb-4">
+          <div
+            className="flex gap-0.5 w-fit"
+            style={{ background: '#F5F1E9', padding: 3, borderRadius: 8, border: '1px solid #ECE6D9' }}
+          >
+            <button
+              onClick={() => setViewMode('cards')}
+              className="px-3.5 py-1.5 text-xs font-medium rounded-md transition-all"
+              style={{
+                background: viewMode === 'cards' ? '#FFFFFF' : 'transparent',
+                color: viewMode === 'cards' ? '#1A1F2C' : '#8A929C',
+                boxShadow: viewMode === 'cards' ? '0 1px 2px rgba(0,0,0,0.04)' : undefined,
+              }}
+            >
+              Card view
+            </button>
+            <button
+              onClick={() => setViewMode('matrix')}
+              className="px-3.5 py-1.5 text-xs font-medium rounded-md transition-all"
+              style={{
+                background: viewMode === 'matrix' ? '#FFFFFF' : 'transparent',
+                color: viewMode === 'matrix' ? '#1A1F2C' : '#8A929C',
+                boxShadow: viewMode === 'matrix' ? '0 1px 2px rgba(0,0,0,0.04)' : undefined,
+              }}
+            >
+              Matrix view
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Matrix view */}
+      {!generating && hasFindings && viewMode === 'matrix' && (
+        <ObjectivesMatrixView interviewId={interviewId} singleInterview />
+      )}
+
+      {!generating && hasFindings && viewMode === 'cards' && (
         <div className="flex flex-col gap-6">
           {/* Summary strip */}
           <div className="flex gap-3 flex-wrap">
@@ -220,6 +260,7 @@ export default function ObjectivesTab({
     </div>
   )
 }
+
 
 function ObjectiveSection({
   meta,
