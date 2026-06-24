@@ -104,26 +104,7 @@ export async function runClustering(type: string): Promise<ClusteredTypeData> {
     }
   }
 
-  // 3. Call LLM to cluster
-  const llmInput = findings.map(f => ({
-    id: f.id,
-    objective: f.objective,
-    category: f.category,
-    label: f.label,
-    participantCode: pcMap[f.interviewId] ?? null,
-  }))
-
-  const result = await callJSON<ClusterLLMResponse>({
-    model: MODELS.haiku,
-    system: CLUSTERING_SYSTEM,
-    user: buildClusteringUser(TYPE_LABELS[type] ?? type, llmInput),
-    operation: 'objective_clustering',
-    maxTokens: MAX_TOKENS.clustering,
-  })
-
-  const { clusters: llmClusters } = result.data
-
-  // 4. Delete old clusters + clear cluster_id for this type
+  // 3. Delete old clusters + clear cluster_id for this type
   const oldClusters = await db
     .select({ id: objectiveClusters.id })
     .from(objectiveClusters)
@@ -131,7 +112,6 @@ export async function runClustering(type: string): Promise<ClusteredTypeData> {
 
   if (oldClusters.length > 0) {
     const oldIds = oldClusters.map(c => c.id)
-    // Clear cluster_id on findings pointing to old clusters
     for (const oldId of oldIds) {
       await db
         .update(objectiveFindings)
@@ -141,71 +121,109 @@ export async function runClustering(type: string): Promise<ClusteredTypeData> {
     await db.delete(objectiveClusters).where(eq(objectiveClusters.type, type))
   }
 
-  // 5. Insert new clusters and assign findings
+  // 4. Cluster in chunks: one LLM call per (objective × category) combo
+  //    This keeps each call small — even with 16+ interviews the token
+  //    count stays well under limits.
+  const OBJECTIVES: Objective[] = ['objective_1', 'objective_2', 'objective_3']
+  const CATEGORIES: FindingCategory[] = ['facilitator', 'barrier']
+
   const clusterViews: ClusterView[] = []
+  let totalCostPaise = 0
+  let lastModel = ''
 
-  for (const llmCluster of llmClusters) {
-    const [inserted] = await db
-      .insert(objectiveClusters)
-      .values({
-        type,
-        objective: llmCluster.objective as Objective,
-        category: llmCluster.category as FindingCategory,
-        clusterName: llmCluster.name,
-      })
-      .returning({ id: objectiveClusters.id })
+  for (const obj of OBJECTIVES) {
+    for (const cat of CATEGORIES) {
+      const chunk = findings.filter(f => f.objective === obj && f.category === cat)
+      if (chunk.length === 0) continue
 
-    // Validate finding IDs — only assign ones that actually exist for this type
-    const validFindingIds = llmCluster.finding_ids.filter(fid =>
-      findings.some(f => f.id === fid)
-    )
+      // If ≤2 findings in this combo, just make each its own cluster (no LLM needed)
+      if (chunk.length <= 2) {
+        for (const f of chunk) {
+          const [inserted] = await db
+            .insert(objectiveClusters)
+            .values({ type, objective: obj, category: cat, clusterName: f.label })
+            .returning({ id: objectiveClusters.id })
 
-    if (validFindingIds.length > 0) {
-      await db
-        .update(objectiveFindings)
-        .set({ clusterId: inserted.id })
-        .where(inArray(objectiveFindings.id, validFindingIds))
-    }
+          await db.update(objectiveFindings).set({ clusterId: inserted.id }).where(eq(objectiveFindings.id, f.id))
 
-    // Build the view
-    const clusterFindings = findings
-      .filter(f => validFindingIds.includes(f.id))
-      .map(f => ({
+          clusterViews.push({
+            id: inserted.id,
+            clusterName: f.label,
+            objective: obj,
+            category: cat,
+            findings: [{ id: f.id, label: f.label, excerpt: f.excerpt, interviewId: f.interviewId, participantCode: pcMap[f.interviewId] ?? null }],
+            interviewCount: 1,
+            totalInterviews: typeInterviews.length,
+          })
+        }
+        continue
+      }
+
+      const llmInput = chunk.map(f => ({
         id: f.id,
+        objective: f.objective,
+        category: f.category,
         label: f.label,
-        excerpt: f.excerpt,
-        interviewId: f.interviewId,
         participantCode: pcMap[f.interviewId] ?? null,
       }))
 
-    const uniqueInterviewIds = new Set(clusterFindings.map(f => f.interviewId))
+      const result = await callJSON<ClusterLLMResponse>({
+        model: MODELS.haiku,
+        system: CLUSTERING_SYSTEM,
+        user: buildClusteringUser(TYPE_LABELS[type] ?? type, llmInput),
+        operation: 'objective_clustering',
+        maxTokens: MAX_TOKENS.clustering,
+      })
 
-    clusterViews.push({
-      id: inserted.id,
-      clusterName: llmCluster.name,
-      objective: llmCluster.objective as Objective,
-      category: llmCluster.category as FindingCategory,
-      findings: clusterFindings,
-      interviewCount: uniqueInterviewIds.size,
-      totalInterviews: typeInterviews.length,
-    })
+      totalCostPaise += result.costInrPaise
+      lastModel = result.model
+
+      for (const llmCluster of result.data.clusters) {
+        const [inserted] = await db
+          .insert(objectiveClusters)
+          .values({ type, objective: obj, category: cat, clusterName: llmCluster.name })
+          .returning({ id: objectiveClusters.id })
+
+        const validFindingIds = llmCluster.finding_ids.filter(fid => chunk.some(f => f.id === fid))
+
+        if (validFindingIds.length > 0) {
+          await db.update(objectiveFindings).set({ clusterId: inserted.id }).where(inArray(objectiveFindings.id, validFindingIds))
+        }
+
+        const clusterFindings = chunk
+          .filter(f => validFindingIds.includes(f.id))
+          .map(f => ({ id: f.id, label: f.label, excerpt: f.excerpt, interviewId: f.interviewId, participantCode: pcMap[f.interviewId] ?? null }))
+
+        const uniqueIvIds = new Set(clusterFindings.map(f => f.interviewId))
+
+        clusterViews.push({
+          id: inserted.id,
+          clusterName: llmCluster.name,
+          objective: obj,
+          category: cat,
+          findings: clusterFindings,
+          interviewCount: uniqueIvIds.size,
+          totalInterviews: typeInterviews.length,
+        })
+      }
+    }
   }
 
-  // 6. Upsert cluster run record
+  // 5. Upsert cluster run record
   await db
     .insert(objectiveClusterRuns)
     .values({
       type,
-      llmModel: result.model,
-      costInrPaise: result.costInrPaise,
+      llmModel: lastModel,
+      costInrPaise: totalCostPaise,
       findingCount: findings.length,
       clusterCount: clusterViews.length,
     })
     .onConflictDoUpdate({
       target: objectiveClusterRuns.type,
       set: {
-        llmModel: result.model,
-        costInrPaise: result.costInrPaise,
+        llmModel: lastModel,
+        costInrPaise: totalCostPaise,
         findingCount: findings.length,
         clusterCount: clusterViews.length,
         generatedAt: new Date(),
@@ -221,7 +239,7 @@ export async function runClustering(type: string): Promise<ClusteredTypeData> {
       generatedAt: new Date().toISOString(),
       findingCount: findings.length,
       clusterCount: clusterViews.length,
-      costInrPaise: result.costInrPaise,
+      costInrPaise: totalCostPaise,
     },
   }
 }
