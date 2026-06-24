@@ -12,7 +12,6 @@ import {
 import type { ReflectionSource } from '@/types/database'
 import type { Objective, FindingCategory } from '@/db/schema/analysis'
 import ObjectivesMatrixView from './ObjectivesMatrixView'
-import ClusteredObjectivesView from '../../_components/ClusteredObjectivesView'
 
 type Props = {
   interviewId: string
@@ -259,26 +258,6 @@ export default function ObjectivesTab({
         </div>
       )}
 
-      {/* ── Compiled Objectives Analysis ── */}
-      {!generating && hasFindings && (
-        <div className="mt-10">
-          <div
-            className="flex items-center gap-3 mb-5 pb-3"
-            style={{ borderBottom: '1px solid #ECE6D9' }}
-          >
-            <h2
-              className="text-lg tracking-tight"
-              style={{ fontFamily: 'var(--font-serif)', fontWeight: 500, color: '#1A1F2C' }}
-            >
-              Compiled Objectives Analysis
-            </h2>
-            <span className="text-xs" style={{ color: '#8A929C' }}>
-              Clustered across all interviews by participant type
-            </span>
-          </div>
-          <ClusteredObjectivesView />
-        </div>
-      )}
     </div>
   )
 }

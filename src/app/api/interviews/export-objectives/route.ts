@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
-import { interviews, contacts, objectiveFindings } from '@/db/schema'
+import { interviews, contacts, objectiveFindings, objectiveClusters } from '@/db/schema'
 import { isNull, inArray, eq, and } from 'drizzle-orm'
 import type { Objective, FindingCategory } from '@/db/schema/analysis'
 
@@ -24,6 +24,13 @@ function csvEscape(val: string): string {
 }
 
 export async function GET(req: NextRequest) {
+  const mode = req.nextUrl.searchParams.get('mode')
+
+  // ── Clustered export ──────────────────────────────────────────────────
+  if (mode === 'clustered') {
+    return exportClustered()
+  }
+
   const singleId = req.nextUrl.searchParams.get('interviewId')
 
   // Fetch interviews
@@ -148,6 +155,131 @@ export async function GET(req: NextRequest) {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
       'Content-Disposition': `attachment; filename="${filename}"`,
+    },
+  })
+}
+
+// ── Clustered export: grouped by participant type with counts ───────────
+
+async function exportClustered() {
+  const TYPE_ORDER = ['doctor', 'patient', 'survivor', 'other']
+
+  // Get all interviews
+  const allInterviews = await db
+    .select({
+      id: interviews.id,
+      participantCode: interviews.participantCode,
+      type: interviews.type,
+    })
+    .from(interviews)
+    .where(isNull(interviews.deletedAt))
+
+  if (allInterviews.length === 0) {
+    return NextResponse.json({ error: 'No interviews found' }, { status: 404 })
+  }
+
+  // Get all clusters
+  const clusters = await db.select().from(objectiveClusters)
+
+  if (clusters.length === 0) {
+    return NextResponse.json({ error: 'No clusters found. Run clustering first.' }, { status: 404 })
+  }
+
+  const clusterIds = clusters.map(c => c.id)
+
+  // Get all clustered findings
+  const findings = await db
+    .select({
+      id: objectiveFindings.id,
+      interviewId: objectiveFindings.interviewId,
+      objective: objectiveFindings.objective,
+      category: objectiveFindings.category,
+      label: objectiveFindings.label,
+      excerpt: objectiveFindings.excerpt,
+      clusterId: objectiveFindings.clusterId,
+    })
+    .from(objectiveFindings)
+    .where(inArray(objectiveFindings.clusterId, clusterIds))
+
+  // Build interview lookup
+  const ivMap = Object.fromEntries(allInterviews.map(iv => [iv.id, iv]))
+
+  // Headers
+  const headers = [
+    'Participant Type',
+    'Objective',
+    'Category',
+    'Cluster Name',
+    'Interview Count',
+    'Total Interviews of Type',
+    'Coverage',
+    'Individual Findings',
+    'Participant Codes',
+  ]
+
+  const rows: string[][] = [headers]
+
+  // Process each type
+  for (const type of TYPE_ORDER) {
+    const typeInterviews = allInterviews.filter(iv => iv.type === type)
+    if (typeInterviews.length === 0) continue
+    const typeInterviewIds = new Set(typeInterviews.map(iv => iv.id))
+    const typeClusters = clusters.filter(c => c.type === type)
+
+    if (typeClusters.length === 0) continue
+
+    // Sort clusters: by objective, then category, then by interview count descending
+    const sorted = typeClusters
+      .map(c => {
+        const clusterFindings = findings.filter(f => f.clusterId === c.id)
+        const uniqueIvIds = new Set(clusterFindings.filter(f => typeInterviewIds.has(f.interviewId)).map(f => f.interviewId))
+        return { cluster: c, findings: clusterFindings, interviewCount: uniqueIvIds.size }
+      })
+      .sort((a, b) => {
+        if (a.cluster.objective !== b.cluster.objective) return a.cluster.objective.localeCompare(b.cluster.objective)
+        if (a.cluster.category !== b.cluster.category) return a.cluster.category.localeCompare(b.cluster.category)
+        return b.interviewCount - a.interviewCount
+      })
+
+    // Add type header row
+    rows.push([
+      `--- ${(TYPE_LABELS[type] ?? type).toUpperCase()}S (${typeInterviews.length} interviews) ---`,
+      '', '', '', '', '', '', '', '',
+    ])
+
+    for (const { cluster, findings: cFindings, interviewCount } of sorted) {
+      const participantCodes = [...new Set(
+        cFindings
+          .map(f => ivMap[f.interviewId]?.participantCode ?? f.interviewId.slice(0, 8))
+      )].join('; ')
+
+      const individualLabels = cFindings.map(f => f.label).join('; ')
+      const coverage = `${interviewCount}/${typeInterviews.length}`
+
+      rows.push([
+        TYPE_LABELS[type] ?? type,
+        OBJECTIVE_LABELS[cluster.objective] ?? cluster.objective,
+        cluster.category === 'facilitator' ? 'Facilitator' : 'Barrier',
+        cluster.clusterName,
+        String(interviewCount),
+        String(typeInterviews.length),
+        coverage,
+        individualLabels,
+        participantCodes,
+      ])
+    }
+
+    // Separator
+    rows.push(Array(headers.length).fill(''))
+  }
+
+  const csv = rows.map(row => row.map(csvEscape).join(',')).join('\r\n')
+  const dateStr = new Date().toISOString().slice(0, 10)
+
+  return new NextResponse(csv, {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="compiled-objectives-${dateStr}.csv"`,
     },
   })
 }

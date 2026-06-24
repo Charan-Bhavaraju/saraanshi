@@ -327,7 +327,7 @@ export default function ClusteredObjectivesView() {
           </p>
         </div>
         <a
-          href="/api/interviews/export-objectives"
+          href="/api/interviews/export-objectives?mode=clustered"
           download
           className="flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-lg transition-all"
           style={{ background: '#0E5C5C', color: '#FFFFFF' }}
