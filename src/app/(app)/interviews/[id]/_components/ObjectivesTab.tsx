@@ -12,6 +12,7 @@ import {
 import type { ReflectionSource } from '@/types/database'
 import type { Objective, FindingCategory } from '@/db/schema/analysis'
 import ObjectivesMatrixView from './ObjectivesMatrixView'
+import ClusteredObjectivesView from '../../_components/ClusteredObjectivesView'
 
 type Props = {
   interviewId: string
@@ -117,9 +118,9 @@ export default function ObjectivesTab({
   })
 
   return (
-    <div className={viewMode === 'matrix' ? '' : 'max-w-3xl'}>
+    <div>
       {/* Controls */}
-      <div className="rounded-[14px] p-5 mb-6" style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}>
+      <div className="max-w-3xl rounded-[14px] p-5 mb-6" style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}>
         <label className="block text-xs font-medium mb-1.5" style={{ color: '#4A5263', textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: 10 }}>
           Source for analysis
         </label>
@@ -221,7 +222,7 @@ export default function ObjectivesTab({
       )}
 
       {!generating && hasFindings && viewMode === 'cards' && (
-        <div className="flex flex-col gap-6">
+        <div className="max-w-3xl flex flex-col gap-6">
           {/* Summary strip */}
           <div className="flex gap-3 flex-wrap">
             {byObjective.map(({ objective, meta, facilitators, barriers }) => (
@@ -255,6 +256,27 @@ export default function ObjectivesTab({
               onSeek={onSeek}
             />
           ))}
+        </div>
+      )}
+
+      {/* ── Compiled Objectives Analysis ── */}
+      {!generating && hasFindings && (
+        <div className="mt-10">
+          <div
+            className="flex items-center gap-3 mb-5 pb-3"
+            style={{ borderBottom: '1px solid #ECE6D9' }}
+          >
+            <h2
+              className="text-lg tracking-tight"
+              style={{ fontFamily: 'var(--font-serif)', fontWeight: 500, color: '#1A1F2C' }}
+            >
+              Compiled Objectives Analysis
+            </h2>
+            <span className="text-xs" style={{ color: '#8A929C' }}>
+              Clustered across all interviews by participant type
+            </span>
+          </div>
+          <ClusteredObjectivesView />
         </div>
       )}
     </div>

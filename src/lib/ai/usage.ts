@@ -8,6 +8,7 @@ export type UsageOperation =
   | 'theme_naming'
   | 'rag_chat'
   | 'findings_draft'
+  | 'objective_clustering'
 
 export type UsageEntry = {
   interviewId?: string | null

@@ -16,7 +16,8 @@ export const MAX_TOKENS = {
   objectives: 8192,
   findings: 1500,
   themeNaming: 256,
-  rag: 1500,
+  rag: 4096,
+  clustering: 8192,
 } as const
 
 // ── Layer 1: per-interview insights (Haiku, structured JSON) ──
@@ -159,3 +160,38 @@ STRICT RULES:
 - Quote ONLY verbatim text from the provided passages. Never fabricate or paraphrase inside quotation marks.
 - Use participant codes only; never invent or infer real names.
 - Academic, measured tone. No overclaiming.`
+
+// ── Objective clustering: groups similar findings across interviews ──
+export const CLUSTERING_SYSTEM = `You are a qualitative research assistant. You will receive a list of objective findings (facilitators and barriers) from multiple interviews of the same participant type (e.g. all doctors, all patients, or all survivors). Each finding has an ID, the objective it belongs to, whether it is a facilitator or barrier, and its label text.
+
+Your job: group semantically similar findings into clusters. Findings that describe the same underlying concept, barrier, or facilitator — even if worded differently — should be in the same cluster.
+
+RULES:
+- Group by MEANING, not by exact wording. "Family support for treatment" and "Relatives helping with hospital visits" are the same cluster.
+- Give each cluster a clear, concise name (5-10 words) that captures the shared meaning.
+- A finding should belong to exactly ONE cluster.
+- Do NOT merge findings across different objectives or different categories (facilitator vs barrier). Only cluster within the same objective + category combination.
+- If a finding is truly unique (no similar findings), it gets its own single-member cluster.
+- Preserve all finding IDs — every input ID must appear in exactly one cluster.
+
+Return ONLY a JSON object with this shape:
+{
+  "clusters": [
+    {
+      "name": "Cluster name describing the shared concept",
+      "objective": "objective_1",
+      "category": "facilitator",
+      "finding_ids": ["id1", "id2", "id3"]
+    }
+  ]
+}`
+
+export function buildClusteringUser(
+  type: string,
+  findings: { id: string; objective: string; category: string; label: string; participantCode: string | null }[],
+): string {
+  const lines = findings.map(f =>
+    `- [ID: ${f.id}] [Obj: ${f.objective}] [Cat: ${f.category}] [Participant: ${f.participantCode ?? 'unknown'}] ${f.label}`
+  )
+  return `Here are ${findings.length} objective findings from all ${type} interviews. Group semantically similar findings into clusters.\n\n${lines.join('\n')}`
+}

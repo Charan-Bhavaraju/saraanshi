@@ -88,7 +88,28 @@ export const objectiveFindings = pgTable('objective_findings', {
   excerpt: text('excerpt'),
   rationale: text('rationale'),
   timestamps: jsonb('timestamps').$type<number[]>(),
+  clusterId: uuid('cluster_id'),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+// ─── Objective clusters: groups similar findings across interviews ───
+export const objectiveClusters = pgTable('objective_clusters', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  type: text('type').notNull(),          // 'doctor' | 'patient' | 'survivor' | 'other'
+  objective: text('objective').notNull().$type<Objective>(),
+  category: text('category').notNull().$type<FindingCategory>(),
+  clusterName: text('cluster_name').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+})
+
+export const objectiveClusterRuns = pgTable('objective_cluster_runs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  type: text('type').notNull().unique(),  // one run per participant type
+  llmModel: text('llm_model'),
+  costInrPaise: integer('cost_inr_paise'),
+  findingCount: integer('finding_count').notNull().default(0),
+  clusterCount: integer('cluster_count').notNull().default(0),
+  generatedAt: timestamp('generated_at', { withTimezone: true }).defaultNow(),
 })
 
 // One row per interview — tracks when objectives were last generated.
@@ -182,6 +203,14 @@ export const objectiveFindingsRelations = relations(objectiveFindings, ({ one })
     fields: [objectiveFindings.interviewId],
     references: [interviews.id],
   }),
+  cluster: one(objectiveClusters, {
+    fields: [objectiveFindings.clusterId],
+    references: [objectiveClusters.id],
+  }),
+}))
+
+export const objectiveClustersRelations = relations(objectiveClusters, ({ many }) => ({
+  findings: many(objectiveFindings),
 }))
 
 export const objectiveRunsRelations = relations(objectiveRuns, ({ one }) => ({
@@ -260,3 +289,9 @@ export type ObjectiveRun = typeof objectiveRuns.$inferSelect
 export type ObjectiveRunInsert = typeof objectiveRuns.$inferInsert
 
 export type ClusterWatermark = typeof clusterWatermark.$inferSelect
+
+export type ObjectiveCluster = typeof objectiveClusters.$inferSelect
+export type ObjectiveClusterInsert = typeof objectiveClusters.$inferInsert
+
+export type ObjectiveClusterRun = typeof objectiveClusterRuns.$inferSelect
+export type ObjectiveClusterRunInsert = typeof objectiveClusterRuns.$inferInsert
