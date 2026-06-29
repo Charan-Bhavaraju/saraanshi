@@ -4,6 +4,7 @@ import {
   getThemes,
   getSaturationData,
   getCorpusIndexStatus,
+  getSavedSessions,
 } from './actions'
 import AnalysisWorkspace from './_components/AnalysisWorkspace'
 
@@ -16,6 +17,7 @@ export default async function AnalysisPage() {
   const themes = await getThemes()
   const saturation = await getSaturationData()
   const indexStatus = await getCorpusIndexStatus()
+  const savedSessions = await getSavedSessions()
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 pb-20">
@@ -49,6 +51,7 @@ export default async function AnalysisPage() {
           themes={themes}
           saturation={saturation}
           indexStatus={indexStatus}
+          savedSessions={savedSessions}
         />
       </div>
     </div>

@@ -415,7 +415,35 @@ export async function saveAnalysisSession(
     .insert(analysisSessions)
     .values({ title: title.slice(0, 200), messages })
     .returning({ id: analysisSessions.id })
+  revalidatePath('/analysis')
   return { id: row.id }
+}
+
+export type SavedSession = {
+  id: string
+  title: string | null
+  messages: ChatMessage[]
+  createdAt: string
+}
+
+export async function getSavedSessions(): Promise<SavedSession[]> {
+  const rows = await db
+    .select({
+      id: analysisSessions.id,
+      title: analysisSessions.title,
+      messages: analysisSessions.messages,
+      createdAt: analysisSessions.createdAt,
+    })
+    .from(analysisSessions)
+    .orderBy(sql`created_at DESC`)
+    .limit(50)
+
+  return rows.map(r => ({
+    id: r.id,
+    title: r.title,
+    messages: (r.messages ?? []) as ChatMessage[],
+    createdAt: r.createdAt.toISOString(),
+  }))
 }
 
 export async function getSaturationData(): Promise<SaturationPoint[]> {

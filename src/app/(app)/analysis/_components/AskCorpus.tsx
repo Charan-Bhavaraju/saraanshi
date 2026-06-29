@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { verifyQuotes } from '@/lib/ai/verify-quotes'
 import { indexCorpus, saveAnalysisSession } from '../actions'
+import type { SavedSession } from '../actions'
 import type { IndexStatus } from '@/lib/rag/indexing'
 import type { ChatMessage, ChatSource } from '@/types/database'
 
@@ -13,13 +14,44 @@ function mmss(s: number): string {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 }
 
-export default function AskCorpus({ indexStatus }: { indexStatus: IndexStatus }) {
+const EXAMPLE_GROUPS: { label: string; prompts: string[] }[] = [
+  {
+    label: 'Theme exploration',
+    prompts: [
+      'What do patients say about not recognizing early symptoms of breast cancer?',
+      'How do participants describe the role of family support during treatment?',
+      'What financial barriers to treatment do patients and survivors mention?',
+      'What patterns exist around delayed diagnosis due to fear or stigma?',
+    ],
+  },
+  {
+    label: 'Compare perspectives',
+    prompts: [
+      'Compare what patients vs doctors say about communication during diagnosis',
+      'How do survivors describe follow-up care differently from current patients?',
+      'What do doctors identify as the biggest barriers to early detection?',
+    ],
+  },
+  {
+    label: 'Deep dive',
+    prompts: [
+      'What coping mechanisms do survivors describe for dealing with treatment side effects?',
+      'How do participants describe the role of government schemes and financial aid in accessing treatment?',
+      'What do participants say about psychosocial support and mental health during the care journey?',
+      'Describe the patterns around treatment adherence — what helps and what hinders?',
+    ],
+  },
+]
+
+export default function AskCorpus({ indexStatus, savedSessions }: { indexStatus: IndexStatus; savedSessions: SavedSession[] }) {
   const [status, setStatus] = useState(indexStatus)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [indexing, setIndexing] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [viewingSession, setViewingSession] = useState<SavedSession | null>(null)
+  const [showHistory, setShowHistory] = useState(false)
 
   async function reindex() {
     setIndexing(true)
@@ -142,12 +174,32 @@ export default function AskCorpus({ indexStatus }: { indexStatus: IndexStatus })
       {/* Conversation */}
       <div className="flex flex-col gap-4 mb-4">
         {messages.length === 0 && (
-          <div className="rounded-[14px] p-8 text-center" style={{ background: '#FFF8E8', border: '1px solid #F0E4BC' }}>
-            <p className="text-sm" style={{ color: '#4A5263', lineHeight: 1.6 }}>
-              Ask a question across all indexed transcripts — e.g. &ldquo;What do patients say about
-              the cost of treatment?&rdquo; Answers cite verbatim passages with participant code and
-              timestamp; unverifiable quotes are removed automatically.
+          <div className="rounded-[14px] p-6" style={{ background: '#FFF8E8', border: '1px solid #F0E4BC' }}>
+            <p className="text-sm mb-4" style={{ color: '#4A5263', lineHeight: 1.6 }}>
+              Ask a question across all indexed transcripts. Answers cite verbatim passages with
+              participant code and timestamp.
             </p>
+            <div className="flex flex-col gap-3">
+              {EXAMPLE_GROUPS.map(group => (
+                <div key={group.label}>
+                  <p className="text-xs font-medium mb-1.5" style={{ color: '#8A929C', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {group.label}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.prompts.map(prompt => (
+                      <button
+                        key={prompt}
+                        onClick={() => { setInput(prompt) }}
+                        className="text-xs text-left rounded-lg px-3 py-2 transition-all hover:shadow-sm"
+                        style={{ background: '#FFFFFF', border: '1px solid #ECE6D9', color: '#4A5263', lineHeight: 1.45 }}
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         {messages.map((m, i) => (
@@ -177,7 +229,7 @@ export default function AskCorpus({ indexStatus }: { indexStatus: IndexStatus })
         </button>
       </div>
 
-      {messages.length > 0 && (
+      {messages.length > 0 && !viewingSession && (
         <div className="flex items-center gap-3 mt-3">
           <button
             onClick={save}
@@ -188,6 +240,56 @@ export default function AskCorpus({ indexStatus }: { indexStatus: IndexStatus })
             Save as session
           </button>
           {saved && <span className="text-xs" style={{ color: '#0E5C5C' }}>Saved</span>}
+        </div>
+      )}
+
+      {viewingSession && (
+        <div className="mt-3">
+          <button
+            onClick={() => { setViewingSession(null); setMessages([]) }}
+            className="text-xs font-medium rounded-lg px-3 py-1.5 transition-all"
+            style={{ background: '#FFFFFF', border: '1px solid #ECE6D9', color: '#4A5263' }}
+          >
+            ← Back to new conversation
+          </button>
+        </div>
+      )}
+
+      {/* Saved sessions */}
+      {savedSessions.length > 0 && (
+        <div className="mt-6 pt-5" style={{ borderTop: '1px solid #ECE6D9' }}>
+          <button
+            onClick={() => setShowHistory(h => !h)}
+            className="text-xs font-medium mb-3"
+            style={{ color: '#8A929C' }}
+          >
+            {showHistory ? '▾' : '▸'} Past sessions ({savedSessions.length})
+          </button>
+          {showHistory && (
+            <div className="flex flex-col gap-1.5">
+              {savedSessions.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => {
+                    setViewingSession(s)
+                    setMessages(s.messages)
+                    setSaved(false)
+                  }}
+                  className="text-left rounded-lg px-3.5 py-2.5 transition-all hover:shadow-sm"
+                  style={{
+                    background: viewingSession?.id === s.id ? '#E2EEEC' : '#FFFFFF',
+                    border: `1px solid ${viewingSession?.id === s.id ? '#C5DDD8' : '#ECE6D9'}`,
+                  }}
+                >
+                  <p className="text-sm truncate" style={{ color: '#1A1F2C' }}>{s.title}</p>
+                  <p className="text-xs mt-0.5" style={{ color: '#8A929C' }}>
+                    {new Date(s.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    {' · '}{s.messages.filter(m => m.role === 'user').length} question{s.messages.filter(m => m.role === 'user').length === 1 ? '' : 's'}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

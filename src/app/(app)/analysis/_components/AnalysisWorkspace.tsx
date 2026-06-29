@@ -6,7 +6,7 @@ import ThemeTree from './ThemeTree'
 import SaturationTracker from './SaturationTracker'
 import AskCorpus from './AskCorpus'
 import ClusteredObjectivesView from '@/app/(app)/interviews/_components/ClusteredObjectivesView'
-import type { SuggestedTheme, ClusterStatus, ThemeNode, SaturationPoint } from '../actions'
+import type { SuggestedTheme, ClusterStatus, ThemeNode, SaturationPoint, SavedSession } from '../actions'
 import type { IndexStatus } from '@/lib/rag/indexing'
 
 type View = 'suggested' | 'tree' | 'saturation' | 'ask' | 'objectives'
@@ -25,12 +25,14 @@ export default function AnalysisWorkspace({
   themes,
   saturation,
   indexStatus,
+  savedSessions,
 }: {
   initialSuggestions: SuggestedTheme[]
   status: ClusterStatus
   themes: ThemeNode[]
   saturation: SaturationPoint[]
   indexStatus: IndexStatus
+  savedSessions: SavedSession[]
 }) {
   const [view, setView] = useState<View>('suggested')
 
@@ -59,7 +61,7 @@ export default function AnalysisWorkspace({
       {view === 'suggested' && <SuggestedThemes initial={initialSuggestions} status={status} />}
       {view === 'tree' && <ThemeTree initial={themes} />}
       {view === 'saturation' && <SaturationTracker data={saturation} />}
-      {view === 'ask' && <AskCorpus indexStatus={indexStatus} />}
+      {view === 'ask' && <AskCorpus indexStatus={indexStatus} savedSessions={savedSessions} />}
       {view === 'objectives' && <ClusteredObjectivesView />}
     </div>
   )
