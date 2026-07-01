@@ -8,7 +8,7 @@ import { RAG_SYSTEM, MAX_TOKENS } from '@/lib/ai/prompts'
 
 export const maxDuration = 60
 
-const TOP_K = 20
+const TOP_K = 40
 
 function mmss(s: number): string {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`

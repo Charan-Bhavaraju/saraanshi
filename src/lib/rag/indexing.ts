@@ -6,15 +6,15 @@ import { embedBatch } from '@/lib/ai/gemini'
 import { redact } from '@/lib/ai/redaction'
 import { buildContactRedactionEntries } from '@/lib/ai/redaction-db'
 import { chunkSegments } from '@/lib/ai/chunking'
-import type { TranscriptSegment } from '@/types/database'
+import type { TranscriptSegment, TranslationSegment } from '@/types/database'
 
 const INDEXABLE = ['reviewed', 'analyzed'] as const
 
 // Hash of the cleaned (non-hidden) segment texts — change-detection for re-index.
-function sourceHash(segments: TranscriptSegment[]): string {
+function sourceHash(segments: TranscriptSegment[], translationMap: Map<number, string>): string {
   const basis = segments
     .filter(s => !s.hidden)
-    .map(s => s.text)
+    .map((s, i) => translationMap.get(i) ?? s.text)
     .join('')
   return createHash('sha256').update(basis).digest('hex')
 }
@@ -45,7 +45,7 @@ export async function indexInterview(
   }
 
   const [transcript] = await db
-    .select({ segments: transcripts.segments })
+    .select({ segments: transcripts.segments, translationSegments: transcripts.translationSegments })
     .from(transcripts)
     .where(and(eq(transcripts.interviewId, interviewId), eq(transcripts.isCurrent, true)))
     .limit(1)
@@ -53,15 +53,26 @@ export async function indexInterview(
   const segments = (transcript?.segments as TranscriptSegment[] | null) ?? []
   if (segments.length === 0) return { interviewId, chunks: 0, skipped: true }
 
-  const hash = sourceHash(segments)
+  // Build a lookup from segment index → English translation text.
+  const translationMap = new Map<number, string>()
+  const translationSegs = (transcript?.translationSegments as TranslationSegment[] | null) ?? []
+  for (const ts of translationSegs) {
+    if (ts.enText?.trim()) translationMap.set(ts.segmentIdx, ts.enText)
+  }
+
+  const hash = sourceHash(segments, translationMap)
   if (!opts.force && hash === interview.chunkSourceHash) {
     return { interviewId, chunks: 0, skipped: true }
   }
 
   const entries = await buildContactRedactionEntries(interview.contactId, interview.participantCode)
+  // Prefer English translation per-segment; fall back to cleaned transcript text.
   const redactedSegments = segments
     .filter(s => !s.hidden && s.text?.trim())
-    .map(s => ({ start: s.start, end: s.end, text: redact(s.text, entries).text }))
+    .map((s, i) => {
+      const sourceText = translationMap.get(i) ?? s.text
+      return { start: s.start, end: s.end, text: redact(sourceText, entries).text }
+    })
 
   const chunks = chunkSegments(redactedSegments)
 

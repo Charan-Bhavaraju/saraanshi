@@ -1,5 +1,5 @@
 // Splits transcript segments into overlapping word-windows for RAG indexing.
-// ~200-word windows with ~50-word overlap. Each chunk's start/end seconds are
+// ~80-word windows with ~20-word overlap for tight, quotable passages. Each chunk's start/end seconds are
 // taken from the segments its first/last words came from (we have segment-level,
 // not word-level, timestamps — close enough for "jump to this passage").
 // Pure function — no I/O.
@@ -16,8 +16,8 @@ export function chunkSegments(
   segments: ChunkInput[],
   opts: { targetWords?: number; overlapWords?: number } = {},
 ): Chunk[] {
-  const target = opts.targetWords ?? 200
-  const overlap = opts.overlapWords ?? 50
+  const target = opts.targetWords ?? 80
+  const overlap = opts.overlapWords ?? 20
   const step = Math.max(1, target - overlap)
 
   // Flatten to words carrying their segment's timestamps.
