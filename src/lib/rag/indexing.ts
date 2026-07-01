@@ -111,7 +111,7 @@ export async function indexAllReviewed(): Promise<{ indexedInterviews: number; t
   let indexedInterviews = 0
   let totalChunks = 0
   for (const iv of reviewed) {
-    const r = await indexInterview(iv.id)
+    const r = await indexInterview(iv.id, { force: true })
     if (!r.skipped) {
       indexedInterviews++
       totalChunks += r.chunks
