@@ -28,7 +28,10 @@ export async function POST() {
         // Step 3: index each interview, streaming progress
         let completed = 0
         let totalChunks = 0
-        for (const iv of interviews) {
+        for (let idx = 0; idx < interviews.length; idx++) {
+          // Pause 2s between interviews to stay under Gemini free-tier rate limit (100 req/min)
+          if (idx > 0) await new Promise(r => setTimeout(r, 2000))
+          const iv = interviews[idx]
           const r = await indexInterview(iv.id, { force: true })
           completed++
           totalChunks += r.chunks

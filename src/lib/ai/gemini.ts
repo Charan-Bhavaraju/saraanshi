@@ -64,20 +64,31 @@ export async function embedBatch(
 
   for (let i = 0; i < texts.length; i += MAX_BATCH) {
     const slice = texts.slice(i, i + MAX_BATCH)
-    const res = await fetch(`${BASE}/${MODEL}:batchEmbedContents?key=${apiKey()}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        requests: slice.map(text => ({
-          model: MODEL,
-          content: { parts: [{ text }] },
-          taskType,
-          outputDimensionality: EMBEDDING_DIM,
-        })),
-      }),
-    })
-    if (!res.ok) {
+    let res: Response | undefined
+    for (let attempt = 0; attempt < 5; attempt++) {
+      res = await fetch(`${BASE}/${MODEL}:batchEmbedContents?key=${apiKey()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          requests: slice.map(text => ({
+            model: MODEL,
+            content: { parts: [{ text }] },
+            taskType,
+            outputDimensionality: EMBEDDING_DIM,
+          })),
+        }),
+      })
+      if (res.ok) break
+      if (res.status === 429 && attempt < 4) {
+        // Rate-limited — wait with exponential backoff (10s, 20s, 40s, 80s)
+        const wait = 10_000 * Math.pow(2, attempt)
+        await new Promise(r => setTimeout(r, wait))
+        continue
+      }
       throw new Error(`Gemini batch embed failed: ${res.status} ${await res.text()}`)
+    }
+    if (!res || !res.ok) {
+      throw new Error('Gemini embed: exhausted retries')
     }
     const json = (await res.json()) as { embeddings?: Array<{ values?: number[] }> }
     const embeddings = json.embeddings ?? []
