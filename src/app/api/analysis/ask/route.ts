@@ -6,9 +6,10 @@ import { logUsage } from '@/lib/ai/usage'
 import { costInrPaise } from '@/lib/ai/cost'
 import { RAG_SYSTEM, MAX_TOKENS } from '@/lib/ai/prompts'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 const TOP_K = 40
+const SUB_QUERY_K = 15
 
 function mmss(s: number): string {
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
@@ -19,9 +20,13 @@ function mmss(s: number): string {
 // verification), followed by '\n', then the streamed answer text.
 export async function POST(req: NextRequest) {
   let question = ''
+  let subQueries: string[] = []
   try {
     const body = await req.json()
     question = (body?.question ?? '').toString().trim()
+    if (Array.isArray(body?.subQueries)) {
+      subQueries = body.subQueries.map((q: unknown) => String(q).trim()).filter(Boolean)
+    }
   } catch {
     return NextResponse.json({ error: 'Bad request' }, { status: 400 })
   }
@@ -31,9 +36,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'AI not configured' }, { status: 503 })
   }
 
-  // Embed the question and retrieve the most relevant chunks.
-  const queryVec = await embed(question, 'RETRIEVAL_QUERY')
-  const retrieved = await retrieveChunks(toVectorLiteral(queryVec), TOP_K)
+  // Multi-query retrieval: if subQueries provided, embed each separately,
+  // retrieve SUB_QUERY_K per sub-query, then deduplicate by chunkId.
+  // This prevents a single blended embedding from missing niche sub-themes.
+  type Chunk = Awaited<ReturnType<typeof retrieveChunks>>[number]
+  let retrieved: Chunk[]
+
+  if (subQueries.length > 0) {
+    const seen = new Set<string>()
+    const all: Chunk[] = []
+    for (const sq of subQueries) {
+      const vec = await embed(sq, 'RETRIEVAL_QUERY')
+      const hits = await retrieveChunks(toVectorLiteral(vec), SUB_QUERY_K)
+      for (const h of hits) {
+        if (!seen.has(h.chunkId)) {
+          seen.add(h.chunkId)
+          all.push(h)
+        }
+      }
+    }
+    retrieved = all
+  } else {
+    const queryVec = await embed(question, 'RETRIEVAL_QUERY')
+    retrieved = await retrieveChunks(toVectorLiteral(queryVec), TOP_K)
+  }
 
   const sources = retrieved.map(r => ({
     chunkId: r.chunkId,
