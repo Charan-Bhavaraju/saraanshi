@@ -65,10 +65,10 @@ export default function AskCorpus({ indexStatus, savedSessions }: { indexStatus:
     setShowReindexModal(true)
   }
 
-  async function startReindex() {
-    setReindexPhase('deleting')
+  async function startReindex(mode: 'full' | 'continue' = 'full') {
+    setReindexPhase(mode === 'full' ? 'deleting' : 'indexing')
     try {
-      const res = await fetch('/api/analysis/reindex', { method: 'POST' })
+      const res = await fetch(`/api/analysis/reindex?mode=${mode}`, { method: 'POST' })
       if (!res.ok || !res.body) {
         setReindexPhase('error')
         setReindexError('Failed to start re-indexing.')
@@ -107,8 +107,8 @@ export default function AskCorpus({ indexStatus, savedSessions }: { indexStatus:
               setReindexProgress(p => ({ ...p, completed: ev.total, totalChunks: ev.totalChunks }))
               setStatus(s => ({
                 ...s,
-                indexedInterviews: ev.total,
-                totalChunks: ev.totalChunks,
+                indexedInterviews: ev.indexed ?? ev.total,
+                totalChunks: s.totalChunks + ev.totalChunks,
                 stale: false,
               }))
             } else if (ev.phase === 'error') {
@@ -232,29 +232,35 @@ export default function AskCorpus({ indexStatus, savedSessions }: { indexStatus:
           <div className="rounded-2xl p-6 w-full max-w-md shadow-xl" style={{ background: '#FAF7F2', border: '1px solid #ECE6D9' }}>
             {reindexPhase === 'confirm' && (
               <>
-                <h3 className="text-base font-semibold mb-2" style={{ color: '#1A1F2C' }}>Delete & Re-index Corpus</h3>
-                <p className="text-sm mb-1" style={{ color: '#4A5263', lineHeight: 1.6 }}>
-                  This will <strong>delete all {status.totalChunks} existing chunks</strong> and re-index every reviewed interview from scratch using English translations and 80-word passages.
+                <h3 className="text-base font-semibold mb-2" style={{ color: '#1A1F2C' }}>Re-index Corpus</h3>
+                <p className="text-sm mb-4" style={{ color: '#4A5263', lineHeight: 1.6 }}>
+                  {status.reviewedInterviews} interview{status.reviewedInterviews === 1 ? '' : 's'} available · {status.indexedInterviews} already indexed · {status.totalChunks} passages
                 </p>
-                <p className="text-xs mb-5" style={{ color: '#8A929C' }}>
-                  {status.reviewedInterviews} interview{status.reviewedInterviews === 1 ? '' : 's'} will be re-indexed. This may take a few minutes.
-                </p>
-                <div className="flex gap-2 justify-end">
+                <div className="flex flex-col gap-2 mb-4">
                   <button
-                    onClick={() => setShowReindexModal(false)}
-                    className="text-sm rounded-lg px-4 py-2 transition-all"
-                    style={{ background: '#FFFFFF', border: '1px solid #ECE6D9', color: '#4A5263' }}
+                    onClick={() => startReindex('continue')}
+                    className="w-full text-left text-sm rounded-xl px-4 py-3 transition-all hover:shadow-sm"
+                    style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}
                   >
-                    Cancel
+                    <span className="font-medium" style={{ color: '#0E5C5C' }}>Continue indexing</span>
+                    <p className="text-xs mt-0.5" style={{ color: '#8A929C' }}>Index only remaining un-indexed interviews. Keeps existing chunks.</p>
                   </button>
                   <button
-                    onClick={startReindex}
-                    className="text-sm font-medium rounded-lg px-4 py-2 transition-all"
-                    style={{ background: '#B91C1C', color: '#FFFFFF' }}
+                    onClick={() => startReindex('full')}
+                    className="w-full text-left text-sm rounded-xl px-4 py-3 transition-all hover:shadow-sm"
+                    style={{ background: '#FFFFFF', border: '1px solid #ECE6D9' }}
                   >
-                    Delete & Re-index
+                    <span className="font-medium" style={{ color: '#B91C1C' }}>Delete all & re-index</span>
+                    <p className="text-xs mt-0.5" style={{ color: '#8A929C' }}>Delete all {status.totalChunks} chunks and re-index everything from scratch.</p>
                   </button>
                 </div>
+                <button
+                  onClick={() => setShowReindexModal(false)}
+                  className="w-full text-sm rounded-lg px-4 py-2 transition-all"
+                  style={{ background: '#FFFFFF', border: '1px solid #ECE6D9', color: '#4A5263' }}
+                >
+                  Cancel
+                </button>
               </>
             )}
 
@@ -325,11 +331,11 @@ export default function AskCorpus({ indexStatus, savedSessions }: { indexStatus:
                     Close
                   </button>
                   <button
-                    onClick={startReindex}
+                    onClick={() => startReindex('continue')}
                     className="text-sm font-medium rounded-lg px-4 py-2 transition-all"
                     style={{ background: '#0E5C5C', color: '#FAF7F2' }}
                   >
-                    Retry
+                    Retry remaining
                   </button>
                 </div>
               </div>
