@@ -16,7 +16,7 @@ export const MAX_TOKENS = {
   objectives: 8192,
   findings: 1500,
   themeNaming: 256,
-  rag: 4096,
+  rag: 8192,
   clustering: 8192,
 } as const
 
@@ -72,15 +72,20 @@ export function buildThemeNamingUser(phrases: string[]): string {
 }
 
 // ── Layer 3: RAG chat (Sonnet, streamed) ──
-export const RAG_SYSTEM = `You answer questions about a qualitative interview corpus on the breast-cancer care pathway, using ONLY the transcript chunks provided in the user message.
+export const RAG_SYSTEM = `You answer questions about a qualitative interview corpus on the breast-cancer care pathway, using ONLY the transcript chunks provided in the user message. You produce output suitable for direct inclusion in a master's thesis Results section.
 
 STRICT RULES:
 - Use ONLY the provided chunks. If they do not support an answer, say so plainly — never speculate or use outside knowledge.
-- Quote ONLY verbatim text that appears in the chunks. Every quote must be cited as [participant_code · MM:SS] using the chunk metadata.
-- Order cited passages by participant code, then by timestamp ascending — NOT by retrieval relevance. The chunks are given to you in relevance order; re-sort them before presenting.
-- Flag small sample sizes explicitly, e.g. "Only 2 interviews mention this."
-- Be descriptive and grounded. Attribute claims to participants, not to yourself.
-- The chunks are anonymized; keep participant codes and hospital codes intact.`
+- Quote ONLY verbatim text that appears in the chunks. Every quote must be cited as (participant_code) after the quote.
+- Select only the most meaningful, vivid, and emotionally resonant excerpts. Discard generic or repetitive quotes. Quality over quantity.
+- Order cited passages by participant code, then by timestamp ascending — NOT by retrieval relevance.
+- Flag sample sizes explicitly, e.g. "X out of Y participants described this."
+- Write in formal academic prose — like a qualitative health research thesis. Vary sentence structure. Use active voice where natural. No robotic or formulaic phrasing.
+- Do NOT use bullet points or numbered lists. Write flowing paragraphs with block-quoted excerpts.
+- Present each excerpt as an indented block quote (using >) followed by the participant code in parentheses.
+- When a quote is in Telugu or Hindi, include the original text followed by a translation in square brackets.
+- The chunks are anonymized; keep participant codes and hospital codes intact.
+- Be descriptive and grounded. Attribute claims to participants, not to yourself.`
 
 // ── Layer 1b: per-interview objective-mapped extraction (Haiku, structured JSON) ──
 export const OBJECTIVES_SYSTEM = `You are a careful research assistant supporting a qualitative study on the breast-cancer care pathway. You analyze a single anonymized interview transcript and extract every statement, quotation, experience, opinion, or observation that relates to any of three study objectives.

@@ -13,8 +13,9 @@ const INDEXABLE = ['reviewed', 'analyzed'] as const
 // Hash of the cleaned (non-hidden) segment texts — change-detection for re-index.
 function sourceHash(segments: TranscriptSegment[], translationMap: Map<number, string>): string {
   const basis = segments
-    .filter(s => !s.hidden)
-    .map((s, i) => translationMap.get(i) ?? s.text)
+    .map((s, origIdx) => ({ s, origIdx }))
+    .filter(({ s }) => !s.hidden)
+    .map(({ s, origIdx }) => translationMap.get(origIdx) ?? s.text)
     .join('')
   return createHash('sha256').update(basis).digest('hex')
 }
@@ -68,9 +69,10 @@ export async function indexInterview(
   const entries = await buildContactRedactionEntries(interview.contactId, interview.participantCode)
   // Prefer English translation per-segment; fall back to cleaned transcript text.
   const redactedSegments = segments
-    .filter(s => !s.hidden && s.text?.trim())
-    .map((s, i) => {
-      const sourceText = translationMap.get(i) ?? s.text
+    .map((s, origIdx) => ({ s, origIdx }))
+    .filter(({ s }) => !s.hidden && s.text?.trim())
+    .map(({ s, origIdx }) => {
+      const sourceText = translationMap.get(origIdx) ?? s.text
       return { start: s.start, end: s.end, text: redact(sourceText, entries).text }
     })
 
