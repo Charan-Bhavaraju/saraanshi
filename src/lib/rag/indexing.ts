@@ -103,6 +103,22 @@ export async function indexInterview(
   return { interviewId, chunks: chunks.length, skipped: false }
 }
 
+// Delete all chunks and reset chunk hashes on all interviews.
+export async function deleteAllChunks(): Promise<{ deleted: number }> {
+  const [row] = await db.select({ n: count() }).from(transcriptChunks)
+  await db.delete(transcriptChunks)
+  await db.update(interviews).set({ chunkSourceHash: null, lastChunkedAt: null })
+  return { deleted: row?.n ?? 0 }
+}
+
+// Get all indexable interview IDs (for streaming reindex).
+export async function getIndexableInterviews(): Promise<{ id: string; participantCode: string | null }[]> {
+  return db
+    .select({ id: interviews.id, participantCode: interviews.participantCode })
+    .from(interviews)
+    .where(and(inArray(interviews.status, [...INDEXABLE]), isNull(interviews.deletedAt)))
+}
+
 // Index every reviewed/analyzed interview that is new or stale.
 export async function indexAllReviewed(): Promise<{ indexedInterviews: number; totalChunks: number }> {
   const reviewed = await db

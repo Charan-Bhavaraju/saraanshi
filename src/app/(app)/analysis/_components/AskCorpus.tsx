@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { verifyQuotes } from '@/lib/ai/verify-quotes'
-import { indexCorpus, saveAnalysisSession } from '../actions'
+import { saveAnalysisSession } from '../actions'
 import type { SavedSession } from '../actions'
 import type { IndexStatus } from '@/lib/rag/indexing'
 import type { ChatMessage, ChatSource } from '@/types/database'
@@ -48,23 +48,79 @@ export default function AskCorpus({ indexStatus, savedSessions }: { indexStatus:
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
-  const [indexing, setIndexing] = useState(false)
   const [saved, setSaved] = useState(false)
   const [viewingSession, setViewingSession] = useState<SavedSession | null>(null)
   const [showHistory, setShowHistory] = useState(false)
 
-  async function reindex() {
-    setIndexing(true)
+  // Reindex modal state
+  const [showReindexModal, setShowReindexModal] = useState(false)
+  const [reindexPhase, setReindexPhase] = useState<'confirm' | 'deleting' | 'indexing' | 'done' | 'error'>('confirm')
+  const [reindexProgress, setReindexProgress] = useState({ completed: 0, total: 0, totalChunks: 0, current: '' })
+  const [reindexError, setReindexError] = useState('')
+
+  function openReindexModal() {
+    setReindexPhase('confirm')
+    setReindexProgress({ completed: 0, total: 0, totalChunks: 0, current: '' })
+    setReindexError('')
+    setShowReindexModal(true)
+  }
+
+  async function startReindex() {
+    setReindexPhase('deleting')
     try {
-      const r = await indexCorpus()
-      setStatus(s => ({
-        ...s,
-        indexedInterviews: r.indexedInterviews || s.indexedInterviews,
-        totalChunks: s.totalChunks + r.totalChunks,
-        stale: false,
-      }))
-    } finally {
-      setIndexing(false)
+      const res = await fetch('/api/analysis/reindex', { method: 'POST' })
+      if (!res.ok || !res.body) {
+        setReindexPhase('error')
+        setReindexError('Failed to start re-indexing.')
+        return
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        // Parse SSE events
+        const lines = buffer.split('\n\n')
+        buffer = lines.pop() ?? ''
+        for (const block of lines) {
+          const dataLine = block.trim().replace(/^data: /, '')
+          if (!dataLine) continue
+          try {
+            const ev = JSON.parse(dataLine)
+            if (ev.phase === 'deleting') setReindexPhase('deleting')
+            else if (ev.phase === 'deleted') setReindexPhase('indexing')
+            else if (ev.phase === 'indexing') {
+              setReindexPhase('indexing')
+              setReindexProgress({
+                completed: ev.completed,
+                total: ev.total,
+                totalChunks: ev.totalChunks,
+                current: ev.current ?? '',
+              })
+            } else if (ev.phase === 'done') {
+              setReindexPhase('done')
+              setReindexProgress(p => ({ ...p, completed: ev.total, totalChunks: ev.totalChunks }))
+              setStatus(s => ({
+                ...s,
+                indexedInterviews: ev.total,
+                totalChunks: ev.totalChunks,
+                stale: false,
+              }))
+            } else if (ev.phase === 'error') {
+              setReindexPhase('error')
+              setReindexError(ev.message)
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    } catch (err) {
+      setReindexPhase('error')
+      setReindexError(err instanceof Error ? err.message : 'Connection lost')
     }
   }
 
@@ -158,18 +214,129 @@ export default function AskCorpus({ indexStatus, savedSessions }: { indexStatus:
           {status.stale && ' · some reviewed interviews need indexing'}
         </p>
         <button
-          onClick={reindex}
-          disabled={indexing}
-          className="text-sm font-medium rounded-lg px-3.5 py-1.5 transition-all disabled:opacity-60"
+          onClick={openReindexModal}
+          className="text-sm font-medium rounded-lg px-3.5 py-1.5 transition-all"
           style={{
             background: status.stale || status.totalChunks === 0 ? '#0E5C5C' : '#FFFFFF',
             color: status.stale || status.totalChunks === 0 ? '#FAF7F2' : '#4A5263',
             border: status.stale || status.totalChunks === 0 ? 'none' : '1px solid #ECE6D9',
           }}
         >
-          {indexing ? 'Indexing…' : status.totalChunks === 0 ? 'Index corpus' : 'Re-index'}
+          {status.totalChunks === 0 ? 'Index corpus' : 'Re-index'}
         </button>
       </div>
+
+      {/* Reindex modal */}
+      {showReindexModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <div className="rounded-2xl p-6 w-full max-w-md shadow-xl" style={{ background: '#FAF7F2', border: '1px solid #ECE6D9' }}>
+            {reindexPhase === 'confirm' && (
+              <>
+                <h3 className="text-base font-semibold mb-2" style={{ color: '#1A1F2C' }}>Delete & Re-index Corpus</h3>
+                <p className="text-sm mb-1" style={{ color: '#4A5263', lineHeight: 1.6 }}>
+                  This will <strong>delete all {status.totalChunks} existing chunks</strong> and re-index every reviewed interview from scratch using English translations and 80-word passages.
+                </p>
+                <p className="text-xs mb-5" style={{ color: '#8A929C' }}>
+                  {status.reviewedInterviews} interview{status.reviewedInterviews === 1 ? '' : 's'} will be re-indexed. This may take a few minutes.
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setShowReindexModal(false)}
+                    className="text-sm rounded-lg px-4 py-2 transition-all"
+                    style={{ background: '#FFFFFF', border: '1px solid #ECE6D9', color: '#4A5263' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={startReindex}
+                    className="text-sm font-medium rounded-lg px-4 py-2 transition-all"
+                    style={{ background: '#B91C1C', color: '#FFFFFF' }}
+                  >
+                    Delete & Re-index
+                  </button>
+                </div>
+              </>
+            )}
+
+            {reindexPhase === 'deleting' && (
+              <div className="text-center py-4">
+                <div className="inline-block w-6 h-6 border-2 border-t-transparent rounded-full animate-spin mb-3" style={{ borderColor: '#0E5C5C', borderTopColor: 'transparent' }} />
+                <p className="text-sm font-medium" style={{ color: '#1A1F2C' }}>Deleting existing chunks…</p>
+                <p className="text-xs mt-1" style={{ color: '#8A929C' }}>Clearing the old index</p>
+              </div>
+            )}
+
+            {reindexPhase === 'indexing' && (
+              <div className="py-2">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium" style={{ color: '#1A1F2C' }}>Indexing interviews…</p>
+                  <p className="text-xs font-mono" style={{ color: '#0E5C5C' }}>
+                    {reindexProgress.completed}/{reindexProgress.total}
+                  </p>
+                </div>
+                <div className="w-full h-2 rounded-full overflow-hidden mb-2" style={{ background: '#ECE6D9' }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      background: '#0E5C5C',
+                      width: reindexProgress.total > 0 ? `${(reindexProgress.completed / reindexProgress.total) * 100}%` : '0%',
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs" style={{ color: '#8A929C' }}>
+                    Processing {reindexProgress.current}
+                  </p>
+                  <p className="text-xs" style={{ color: '#8A929C' }}>
+                    {reindexProgress.totalChunks} chunks created
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {reindexPhase === 'done' && (
+              <div className="text-center py-4">
+                <div className="text-2xl mb-2">✓</div>
+                <p className="text-sm font-medium mb-1" style={{ color: '#1A1F2C' }}>Re-indexing complete</p>
+                <p className="text-xs mb-4" style={{ color: '#8A929C' }}>
+                  {reindexProgress.completed} interviews · {reindexProgress.totalChunks} passages
+                </p>
+                <button
+                  onClick={() => setShowReindexModal(false)}
+                  className="text-sm font-medium rounded-lg px-4 py-2 transition-all"
+                  style={{ background: '#0E5C5C', color: '#FAF7F2' }}
+                >
+                  Done
+                </button>
+              </div>
+            )}
+
+            {reindexPhase === 'error' && (
+              <div className="text-center py-4">
+                <div className="text-2xl mb-2">✕</div>
+                <p className="text-sm font-medium mb-1" style={{ color: '#B91C1C' }}>Re-indexing failed</p>
+                <p className="text-xs mb-4" style={{ color: '#8A929C' }}>{reindexError}</p>
+                <div className="flex gap-2 justify-center">
+                  <button
+                    onClick={() => setShowReindexModal(false)}
+                    className="text-sm rounded-lg px-4 py-2 transition-all"
+                    style={{ background: '#FFFFFF', border: '1px solid #ECE6D9', color: '#4A5263' }}
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={startReindex}
+                    className="text-sm font-medium rounded-lg px-4 py-2 transition-all"
+                    style={{ background: '#0E5C5C', color: '#FAF7F2' }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Conversation */}
       <div className="flex flex-col gap-4 mb-4">
